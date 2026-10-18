@@ -23,16 +23,19 @@ The plugin registers as `preview-grid`; bind `prefix+w` / `prefix+a` (see
 
 ## Demo
 
+**Sidebar jump codes, end to end** — badges auto-populate on every layout
+change; `prefix+w` opens the picker (its codes match the sidebar
+one-to-one); typing a code selects, `enter` switches:
+
+<p align="center"><img src="docs/screenshots/demo-jump-codes.gif" width="820" alt="Animated demo: jump-code badges appearing on the sidebar, opening the picker, selecting the seventh space with the pair code uj, and switching to it"></p>
+
 `prefix+a` — agents, with the same layout and preview panel:
 
 <p align="center"><img src="docs/screenshots/agents.png" width="820" alt="Preview Grid in agents mode: agent list with per-item accent badges and live preview"></p>
 
-Both screenshots are rendered from the built-in demo server
-(`tools/demo-server`), which serves a curated layout over the plugin's
-socket protocol — no live herdr session (or private workspace names)
-involved. To regenerate: run the demo server, point `HERDR_SOCKET_PATH` at
-it, capture the pane with `tmux capture-pane -e`, render the SGR through
-any ANSI→HTML converter, and screenshot headless Chromium.
+The screenshots and the GIF are rendered from a throwaway herdr session
+(and `tools/demo-server` for the static shots) — no live workspace names
+are ever published. To regenerate: see [Development](#development).
 
 ## Features
 
@@ -217,6 +220,15 @@ list` shows the `sync-codes` runs.
 UI work without a live session: `go run ./tools/demo-server /tmp/herdr-demo.sock`
 serves a curated layout; point `HERDR_SOCKET_PATH` at the socket and run the
 binary (or open the plugin linked from this checkout) against it.
+
+Screenshots/GIF: run a throwaway herdr server under an isolated
+`XDG_CONFIG_HOME`/`XDG_STATE_HOME` inside tmux, `herdr plugin link` the
+checkout, seed demo workspaces via `herdr workspace create` (hooks populate
+the badges), drive the keys with `tmux send-keys`, and capture each beat with
+`tmux capture-pane -e`; render the SGR through any ANSI→HTML converter,
+screenshot headless Chromium, and assemble with ImageMagick (`-delay` per
+frame, `-layers Optimize`). The popup jump mode renders only on attached
+clients — the GIF therefore demonstrates the picker flow.
 
 ## License
 
