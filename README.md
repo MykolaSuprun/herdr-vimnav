@@ -23,7 +23,11 @@ herdr plugin install MykolaSuprun/herdr-vimnav
 ```
 
 The plugin registers as `preview-grid`; bind `prefix+w` / `prefix+a` (see
-[Install](#install)).
+[Install](#install) and [Keybindings](#keybindings) — no default keybinds ship.
+Install verified on a foreign system: `herdr plugin install --yes
+MykolaSuprun/herdr-vimnav` on Ubuntu 24.04 (upstream herdr 0.9.5, stock Go)
+clones from GitHub, runs the manifest build, and registers every action, pane,
+event, and the startup hook in ~11s.
 
 ## Demo
 
@@ -100,8 +104,12 @@ regenerate: see [Development](#development).
 ## Requirements
 
 - herdr `>= 0.9.3` (plugin pane + socket API, `report_metadata`, `[[startup]]` /
-  `[[events]]` manifest hooks; verified against 0.9.3)
-- Go 1.26+ **only at install/build time** (the released binary is static, `CGO_ENABLED=0`)
+  `[[events]]` manifest hooks; verified against 0.9.3 and installed end-to-end
+  on Ubuntu 24.04 with the upstream 0.9.5 binary)
+- Go **only at install/build time**: any Go `>= 1.21` works — the build's
+  `GOTOOLCHAIN=auto` fetches the go1.26 toolchain the module asks for (verified:
+  stock Ubuntu Go 1.22 built the plugin). The produced binary is static
+  (`CGO_ENABLED=0`), so nothing Go-related is needed at runtime.
 
 ## Install
 
@@ -137,17 +145,64 @@ type = "plugin_action"
 command = "preview-grid.agents"
 description = "switch agent (preview grid)"
 
-# Sidebar jump codes (badges are maintained by the plugin's hooks)
+# Sidebar jump codes (badges are maintained by the plugin's hooks).
+# The popup runs the built binary directly — see "Keybindings" for the path.
 [[keys.command]]
 key = "prefix+f"
 type = "popup"
-command = "/absolute/path/to/herdr-preview-grid/bin/herdr-preview-grid jump"
+command = "/path/to/herdr-preview-grid/bin/herdr-preview-grid jump"
 width = 44
 height = 3
 description = "jump to sidebar code"
 ```
 
 Reload with `prefix+shift+r` (or `herdr server reload-config`).
+
+## Keybindings
+
+The plugin ships **no default keybinds** — herdr's plugin manifest has no key
+schema (it only declares actions, panes, events, and the startup hook), so keys
+always live in your herdr `config.toml`. "Changing a default" is editing the
+`key =` line of the corresponding `[[keys.command]]` entry; nothing to
+reinstall.
+
+**The two picker actions** are bound as `plugin_action` commands named
+`<plugin-id>.<action-id>` — `preview-grid.spaces` and `preview-grid.agents`
+(list them any time with `herdr plugin action list --plugin preview-grid`):
+
+```toml
+[[keys.command]]
+key = "prefix+w"                     # ← change this line (any herdr chord)
+type = "plugin_action"
+command = "preview-grid.spaces"      # ← keep the command, change the chord
+description = "switch space (preview grid)"
+```
+
+**The jump popup** is a plain `popup` binding pointing at the built binary. Its
+path depends on how the plugin was installed — find it instead of guessing:
+
+```sh
+find ~/.config/herdr/plugins/github-installations -name herdr-preview-grid 2>/dev/null | head -1
+# local link/checkout: <checkout>/bin/herdr-preview-grid
+```
+
+```toml
+[[keys.command]]
+key = "prefix+f"
+type = "popup"
+command = "<that-path> jump"
+width = 44
+height = 3
+description = "jump to sidebar code"
+```
+
+**Apply and validate:** edit → `herdr config check` → reload (`prefix+shift+r`
+or `herdr server reload-config`). One footgun: `herdr config reset-keys` backs
+up and **deletes all custom keybindings** — a full reset, not a per-plugin one.
+
+Keys never belong in the *plugin's* config (`herdr plugin config-dir
+preview-grid`, which holds `charset`, `sort`, `master_width`, …) — that file
+configures the plugin's behavior, not how you invoke it.
 
 ## Configuration
 
