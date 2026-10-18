@@ -38,7 +38,9 @@ in
 
     package = lib.mkOption {
       type = lib.types.package;
-      default = config._module.args.herdrPreviewGridPackage or (throw "herdrPreviewGrid: set programs.herdrPreviewGrid.package — the module was imported without the flake's _module.args injection");
+      default =
+        config._module.args.herdrPreviewGridPackage
+          or (throw "herdrPreviewGrid: set programs.herdrPreviewGrid.package — the module was imported without the flake's _module.args injection");
       defaultText = lib.literalExpression "the flake's own package";
       description = "Plugin package; must expose share/herdr/plugins/${manifest.id}.";
     };
@@ -56,7 +58,13 @@ in
     };
 
     settings = lib.mkOption {
-      type = lib.types.attrsOf (lib.types.oneOf [ lib.types.str lib.types.int lib.types.bool ]);
+      type = lib.types.attrsOf (
+        lib.types.oneOf [
+          lib.types.str
+          lib.types.int
+          lib.types.bool
+        ]
+      );
       default = { };
       example = {
         charset = "jklfds";
@@ -89,12 +97,15 @@ in
       ''
     );
 
-    home.file.".config/herdr/plugins/config/${manifest.id}/config.toml" = lib.mkIf (cfg.settings != { }) {
-      # lib.sort (not lib.sortAttrs) — HM's lib on older releases lacks the latter.
-      text =
-        lib.concatMapStringsSep "\n" (name: "${name} = ${renderValue cfg.settings.${name}}")
-          (lib.sort (a: b: a < b) (builtins.attrNames cfg.settings))
-        + "\n";
-    };
+    home.file.".config/herdr/plugins/config/${manifest.id}/config.toml" =
+      lib.mkIf (cfg.settings != { })
+        {
+          # lib.sort (not lib.sortAttrs) — HM's lib on older releases lacks the latter.
+          text =
+            lib.concatMapStringsSep "\n" (name: "${name} = ${renderValue cfg.settings.${name}}") (
+              lib.sort (a: b: a < b) (builtins.attrNames cfg.settings)
+            )
+            + "\n";
+        };
   };
 }

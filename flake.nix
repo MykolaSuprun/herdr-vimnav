@@ -10,7 +10,12 @@
   };
 
   outputs =
-    { self, nixpkgs, home-manager, ... }:
+    {
+      self,
+      nixpkgs,
+      home-manager,
+      ...
+    }:
     let
       systems = [
         "x86_64-linux"
@@ -29,9 +34,12 @@
           inherit (manifest) version;
           src = pkgs.lib.cleanSourceWith {
             src = ./.;
-            filter = path: type:
-              let base = baseNameOf (toString path);
-              in !(type == "directory" && base == ".git");
+            filter =
+              path: type:
+              let
+                base = baseNameOf (toString path);
+              in
+              !(type == "directory" && base == ".git");
           };
           vendorHash = "sha256-EDsq9RzYhe6I2Knr/fL8miUUo4ixsilwgY248QxKRfc=";
           subPackages = [ "cmd/herdr-preview-grid" ];
@@ -97,43 +105,40 @@
         # injection, TOML rendering) without a full home-manager build.
         module-eval = pkgs.runCommand "herdr-preview-grid-hm-module-eval" { } ''
           cat > eval.json <<'JSON'
-          ${builtins.toJSON
-            (
-              let
-                hm =
-                  home-manager.lib.homeManagerConfiguration {
-                    inherit pkgs;
-                    modules = [
-                      self.homeManagerModules.default
-                      {
-                        home.stateVersion = "25.05";
-                        home.username = "hpg-check";
-                        home.homeDirectory = "/home/hpg-check";
-                        programs.herdrPreviewGrid.enable = true;
-                        programs.herdrPreviewGrid.settings = {
-                          charset = "jklfds";
-                          master_width = 0;
-                          preview = true;
-                        };
-                      }
-                    ];
-                  };
-                cfg = hm.config.programs.herdrPreviewGrid;
-              in
-              {
-                inherit (cfg) enable autoLink settings;
-                packageName = cfg.package.name;
-                hasLinkActivation = hm.config.home.activation ? herdrPreviewGridLink;
-                linkAfter = hm.config.home.activation.herdrPreviewGridLink.after;
-                linkData = hm.config.home.activation.herdrPreviewGridLink.data or null;
-                sessionPathHasBinary =
-                  builtins.any (
-                    p: nixpkgs.lib.hasInfix "-herdr-preview-grid-" p && nixpkgs.lib.hasSuffix "/bin" p
-                  )
-                    hm.config.home.sessionPath;
-                settingsFile = hm.config.home.file.".config/herdr/plugins/config/preview-grid/config.toml".text or null;
-              }
-            )}
+          ${builtins.toJSON (
+            let
+              hm = home-manager.lib.homeManagerConfiguration {
+                inherit pkgs;
+                modules = [
+                  self.homeManagerModules.default
+                  {
+                    home.stateVersion = "25.05";
+                    home.username = "hpg-check";
+                    home.homeDirectory = "/home/hpg-check";
+                    programs.herdrPreviewGrid.enable = true;
+                    programs.herdrPreviewGrid.settings = {
+                      charset = "jklfds";
+                      master_width = 0;
+                      preview = true;
+                    };
+                  }
+                ];
+              };
+              cfg = hm.config.programs.herdrPreviewGrid;
+            in
+            {
+              inherit (cfg) enable autoLink settings;
+              packageName = cfg.package.name;
+              hasLinkActivation = hm.config.home.activation ? herdrPreviewGridLink;
+              linkAfter = hm.config.home.activation.herdrPreviewGridLink.after;
+              linkData = hm.config.home.activation.herdrPreviewGridLink.data or null;
+              sessionPathHasBinary = builtins.any (
+                p: nixpkgs.lib.hasInfix "-herdr-preview-grid-" p && nixpkgs.lib.hasSuffix "/bin" p
+              ) hm.config.home.sessionPath;
+              settingsFile =
+                hm.config.home.file.".config/herdr/plugins/config/preview-grid/config.toml".text or null;
+            }
+          )}
           JSON
           # toJSON is compact (no whitespace after ':') — match that.
           grep -q '"enable":true' eval.json
@@ -156,13 +161,18 @@
         {
           imports = [ ./nix/home-manager-module.nix ];
           # Consumers get the flake's own package for free.
-          _module.args.herdrPreviewGridPackage =
-            self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+          _module.args.herdrPreviewGridPackage = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
         };
+
+      # `nix fmt` — the repo's canonical style (also in the devShell).
+      formatter = forAll (pkgs: pkgs.nixfmt-rfc-style);
 
       devShells = forAll (pkgs: {
         default = pkgs.mkShell {
-          packages = [ pkgs.go pkgs.gopls ];
+          packages = [
+            pkgs.go
+            pkgs.gopls
+          ];
         };
       });
     };
