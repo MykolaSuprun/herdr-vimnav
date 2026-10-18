@@ -120,6 +120,58 @@ From GitHub (builds automatically at install time — needs Go, see
 herdr plugin install MykolaSuprun/herdr-vimnav
 ```
 
+On Nix (no Go toolchain and no network on the host — the package is built by
+Nix and linked into herdr's registry from an immutable store path):
+
+```nix
+{
+  # GitLab is the source of truth; github:MykolaSuprun/herdr-vimnav is the mirror.
+  inputs.herdr-vimnav.url = "gitlab:mykolas-open/herdr-vimnav";
+
+  # Home Manager config:
+  imports = [ inputs.herdr-vimnav.homeManagerModules.default ];
+  programs.herdrPreviewGrid = {
+    enable = true;
+    # optional — rendered into
+    # ~/.config/herdr/plugins/config/preview-grid/config.toml
+    # (empty = your file is left untouched)
+    settings = {
+      charset = "jklfds";
+      master_width = 0;
+    };
+  };
+}
+```
+
+At activation the module runs `herdr plugin link <store path> --enabled` and
+puts `herdr-preview-grid` on `home.sessionPath`, so keybindings that run the
+binary directly use its **name** — a hardcoded store path would rot on every
+rebuild:
+
+```toml
+[[keys.command]]
+key = "prefix+f"
+type = "popup"
+command = "herdr-preview-grid jump"
+width = 44
+height = 3
+description = "jump to sidebar code"
+```
+
+Options: `package` (defaults to the flake's own build), `autoLink` (set
+`false` to keep managing the registry yourself, e.g. a dev checkout), `addToPath`,
+`settings`. Without the module the package still works — it exposes
+`share/herdr/plugins/preview-grid`, the convention generic Nix modules link:
+
+```nix
+home.activation.herdrPreviewGridLink = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
+  herdr plugin link ${inputs.herdr-vimnav.packages.${pkgs.system}.default}/share/herdr/plugins/preview-grid --enabled
+'';
+```
+
+Verify the module and package with `nix flake check` (builds the binary, runs
+the Go tests, and evaluates the module against Home Manager).
+
 Local development (no build step at link time; the plugin falls back to
 `go run` if `./bin/herdr-preview-grid` is missing):
 

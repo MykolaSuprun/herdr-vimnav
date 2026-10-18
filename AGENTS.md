@@ -102,6 +102,32 @@ prefix+f ([[keys.command]] popup)
   their hue but read soft; full-intensity accent is glare). Header counts
   `AwaitingInput` items ("N attention").
 
+## Nix packaging
+
+The repo is also a flake: `packages.<system>.default` (buildGoModule, static,
+version read from `herdr-plugin.toml`), `checks` (`package` = build + `go test`,
+`module-eval` = a real `homeManagerConfiguration` eval), `devShells.default`,
+and `homeManagerModules.default` (`nix/home-manager-module.nix`).
+
+Two facts make this work and must not regress:
+
+- **Layout serves both install paths.** Store root = `herdr-plugin.toml` +
+  `bin/herdr-preview-grid` (so `herdr plugin link <store path>` works; link
+  never runs `[[build]]`), plus `share/herdr/plugins/<id> -> ../../../..` for
+  generic Nix modules. `postInstall` must NOT re-install the binary —
+  buildGoModule already put it in `$out/bin` (`test -x` guards it).
+- **Nix is the only Go-free install path.** `herdr plugin install` needs git +
+  a Go toolchain on PATH (it runs the manifest `[[build]]`); the store-path
+  link needs neither. Same for `env.CGO_ENABLED = "0"` (buildGoModule reads
+  `args.env`, nixpkgs' Go defaults it to 1) — the Nix binary must stay static
+  like the manifest build.
+
+Module quirks worth remembering: activation dag entries carry `data` (not
+`text`); `lib.sortAttrs` is absent from HM's lib (use `lib.sort` +
+`builtins.attrNames`); nested `''` inside an antiquotation is a parser error;
+`addToPath` exists because store paths change per rebuild, so bindings should
+use `herdr-preview-grid jump` by name.
+
 ## Development Commands
 
 ```sh
@@ -113,6 +139,8 @@ herdr plugin link "$PWD"  # register with the running herdr (no build step in li
 herdr plugin action invoke preview-grid.spaces   # live smoke test
 HERDR_SOCKET_PATH="$HOME/.config/herdr/herdr.sock" ./bin/herdr-preview-grid sync-codes
 herdr plugin log list     # hook runs + exit codes (sync-codes evidence)
+nix flake check           # Nix package (build + go test) AND HM module eval
+nix develop               # go + gopls shell (optional)
 # popup smoke (reliable harness: a detached tmux pane. Do NOT use script(1) —
 # its pty mode leaves this Bubble Tea v2 TUI waiting on capability queries and
 # no frame renders. Use the wip session's socket so smoke focus-jumps stay out
