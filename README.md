@@ -120,15 +120,43 @@ From GitHub (builds automatically at install time — needs Go, see
 herdr plugin install MykolaSuprun/herdr-vimnav
 ```
 
-On Nix (no Go toolchain and no network on the host — the package is built by
-Nix and linked into herdr's registry from an immutable store path):
+On Nix — **preferred: [`nix-herdr-manager`](https://gitlab.com/mykolas-open/nix-herdr-manager)**,
+the generic plugin manager. The plugin flake ships the contract it needs
+(`passthru.herdrPluginId` + `share/herdr/plugins/<id>`), so the entry is just
+the package:
 
 ```nix
 {
-  # GitLab is the source of truth; github:MykolaSuprun/herdr-vimnav is the mirror.
   inputs.herdr-vimnav.url = "gitlab:mykolas-open/herdr-vimnav";
+  inputs.nix-herdr-manager.url = "gitlab:mykolas-open/nix-herdr-manager";
+  # …
+  imports = [ inputs.nix-herdr-manager.homeManagerModules.default ];
+  programs.herdr-hpm.plugins = [
+    inputs.herdr-vimnav.packages.${pkgs.stdenv.hostPlatform.system}.default
+  ];
+}
+```
 
-  # Home Manager config:
+The manager links plugin store paths at activation, prunes removed ones, and
+puts each plugin's `bin` on `home.sessionPath` — so keybindings run
+`herdr-preview-grid` by **name** (a store path would rot on every rebuild):
+
+```toml
+[[keys.command]]
+key = "prefix+f"
+type = "popup"
+command = "herdr-preview-grid jump"
+width = 44
+height = 3
+description = "jump to sidebar code"
+```
+
+Without the manager this flake also exports its own module
+(`homeManagerModules.default`) for a single-plugin, no-extra-input install:
+
+```nix
+{
+  inputs.herdr-vimnav.url = "gitlab:mykolas-open/herdr-vimnav"; # source of truth; github:MykolaSuprun/herdr-vimnav is the mirror
   imports = [ inputs.herdr-vimnav.homeManagerModules.default ];
   programs.herdrPreviewGrid = {
     enable = true;
@@ -143,25 +171,11 @@ Nix and linked into herdr's registry from an immutable store path):
 }
 ```
 
-At activation the module runs `herdr plugin link <store path> --enabled` and
-puts `herdr-preview-grid` on `home.sessionPath`, so keybindings that run the
-binary directly use its **name** — a hardcoded store path would rot on every
-rebuild:
+Both paths need no Go toolchain and no network on the host: the package is
+built by Nix and `herdr plugin link` never runs the manifest `[[build]]`.
 
-```toml
-[[keys.command]]
-key = "prefix+f"
-type = "popup"
-command = "herdr-preview-grid jump"
-width = 44
-height = 3
-description = "jump to sidebar code"
-```
-
-Options: `package` (defaults to the flake's own build), `autoLink` (set
-`false` to keep managing the registry yourself, e.g. a dev checkout), `addToPath`,
-`settings`. Without the module the package still works — it exposes
-`share/herdr/plugins/preview-grid`, the convention generic Nix modules link:
+Without Home Manager at all, the package still works — it exposes
+`share/herdr/plugins/preview-grid`:
 
 ```nix
 home.activation.herdrPreviewGridLink = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
@@ -169,7 +183,7 @@ home.activation.herdrPreviewGridLink = lib.hm.dag.entryAfter [ "linkGeneration" 
 '';
 ```
 
-Verify the module and package with `nix flake check` (builds the binary, runs
+Verify the package and modules with `nix flake check` (builds the binary, runs
 the Go tests, and evaluates the module against Home Manager).
 
 Local development (no build step at link time; the plugin falls back to

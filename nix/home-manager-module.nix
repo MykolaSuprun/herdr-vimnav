@@ -36,6 +36,13 @@ in
   options.programs.herdrPreviewGrid = {
     enable = lib.mkEnableOption "the herdr preview-grid plugin (store-path linked)";
 
+    herdrPackage = lib.mkOption {
+      type = lib.types.package;
+      default = config.programs.herdr.package or pkgs.herdr;
+      defaultText = lib.literalExpression "config.programs.herdr.package or pkgs.herdr";
+      description = "herdr binary used for the activation link. Home Manager runs activation with a RESTRICTED PATH (herdr is not on it), so the binary is referenced absolutely.";
+    };
+
     package = lib.mkOption {
       type = lib.types.package;
       default =
@@ -87,13 +94,10 @@ in
 
     home.activation.herdrPreviewGridLink = lib.mkIf cfg.autoLink (
       lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-        herdr_bin=$(command -v herdr || true)
-        if [ -n "$herdr_bin" ]; then
-          "$herdr_bin" plugin link ${lib.escapeShellArg pluginDir} --enabled >/dev/null \
-            || echo "herdr-preview-grid: plugin link failed (check 'herdr plugin list')" >&2
-        else
-          echo "herdr-preview-grid: herdr not on PATH — plugin not linked" >&2
-        fi
+        # Absolute path: activation PATH is Home Manager's restricted set —
+        # `command -v herdr` does not find herdr there.
+        "${lib.getExe cfg.herdrPackage}" plugin link ${lib.escapeShellArg pluginDir} --enabled >/dev/null \
+          || echo "herdr-preview-grid: plugin link failed (check 'herdr plugin list')" >&2
       ''
     );
 
