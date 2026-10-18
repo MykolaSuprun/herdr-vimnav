@@ -3,7 +3,11 @@
 **Master-detail switcher for [herdr](https://herdr.dev)** — pick a space or
 agent from a live, preformatted list and watch its pane while you decide.
 
-<p align="center"><img src="docs/screenshots/spaces.png" width="820" alt="Preview Grid in spaces mode: master list with jump-code badges, attention count and cwd hints; live pane preview panel with ANSI colors"></p>
+<p align="center"><img src="docs/screenshots/demo-jump-codes.gif" width="820" alt="Animated demo: sidebar jump-code badges, opening the picker, walking rows, filtering, typing codes, and switching"></p>
+
+*Sidebar badges populate automatically as the layout changes. `prefix+w`
+opens the picker: walk with `ctrl+j/k`, filter with `/`, or type a jump code
+to select — `enter` switches, and the sidebar follows.*
 
 A herdr plugin: a **master-detail switcher** for spaces (workspaces) and
 agents — a list of items with the selected one's live pane preview
@@ -23,19 +27,19 @@ The plugin registers as `preview-grid`; bind `prefix+w` / `prefix+a` (see
 
 ## Demo
 
-**Sidebar jump codes, end to end** — badges auto-populate on every layout
-change; `prefix+w` opens the picker (its codes match the sidebar
-one-to-one); typing a code selects, `enter` switches:
+The selector in both modes — aligned code badges, cwd hints, the pinned
+status rail, and the live preview panel. `prefix+w` — spaces (items owing
+attention lead, MRU after):
 
-<p align="center"><img src="docs/screenshots/demo-jump-codes.gif" width="820" alt="Animated demo: jump-code badges appearing on the sidebar, opening the picker, selecting the seventh space with the pair code uj, and switching to it"></p>
+<p align="center"><img src="docs/screenshots/spaces.png" width="820" alt="Preview Grid in spaces mode: master list with jump-code badges, attention count and cwd hints; live pane preview panel with ANSI colors"></p>
 
-`prefix+a` — agents, with the same layout and preview panel:
+`prefix+a` — agents, same layout:
 
 <p align="center"><img src="docs/screenshots/agents.png" width="820" alt="Preview Grid in agents mode: agent list with per-item accent badges and live preview"></p>
 
-The screenshots and the GIF are rendered from a throwaway herdr session
-(and `tools/demo-server` for the static shots) — no live workspace names
-are ever published. To regenerate: see [Development](#development).
+Assets are rendered from a throwaway herdr session (and `tools/demo-server`
+for the static shots) — no live workspace names are ever published. To
+regenerate: see [Development](#development).
 
 ## Features
 
@@ -221,14 +225,17 @@ UI work without a live session: `go run ./tools/demo-server /tmp/herdr-demo.sock
 serves a curated layout; point `HERDR_SOCKET_PATH` at the socket and run the
 binary (or open the plugin linked from this checkout) against it.
 
-Screenshots/GIF: run a throwaway herdr server under an isolated
-`XDG_CONFIG_HOME`/`XDG_STATE_HOME` inside tmux, `herdr plugin link` the
-checkout, seed demo workspaces via `herdr workspace create` (hooks populate
-the badges), drive the keys with `tmux send-keys`, and capture each beat with
-`tmux capture-pane -e`; render the SGR through any ANSI→HTML converter,
-screenshot headless Chromium, and assemble with ImageMagick (`-delay` per
-frame, `-layers Optimize`). The popup jump mode renders only on attached
-clients — the GIF therefore demonstrates the picker flow.
+Screenshots/GIF: `tools/ansi2html.py` converts a `tmux capture-pane -e`
+dump into styled HTML with exact character-grid geometry (crop, never
+distort); screenshot it headless (`chromium --headless
+--force-device-scale-factor=3`) and assemble with ImageMagick (`-delay`
+per frame, `-dither None` for flat terminal colors, `-layers Optimize`).
+Drive a throwaway herdr server under isolated `XDG_CONFIG_HOME`/
+`XDG_STATE_HOME` inside tmux (`herdr plugin link` the checkout, seed demo
+workspaces so the hooks populate badges, `tmux send-keys` the tour,
+capture each beat) — remember servers daemonize, so restart with
+`herdr server stop`, and the popup jump mode renders only on attached
+clients.
 
 ## License
 
