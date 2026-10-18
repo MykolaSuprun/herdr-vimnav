@@ -55,6 +55,11 @@
             ln -s ../../../.. $out/share/herdr/plugins/${manifest.id}
           '';
 
+          # Nix-aware plugin contract: lets `programs.herdr-hpm` entries be a
+          # bare package (the id is read, never retyped). Kept honest by the
+          # manifest-id check below.
+          passthru.herdrPluginId = manifest.id;
+
           meta = {
             description = "herdr plugin: master-detail switcher for spaces/agents (live pane previews, MRU priority sort, sidebar jump codes)";
             homepage = "https://gitlab.com/mykolas-open/herdr-vimnav";
@@ -72,6 +77,21 @@
       # therefore also the Go test suite.
       checks = forAll (pkgs: {
         package = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+
+        # passthru.herdrPluginId and the manifest must not drift apart: the id
+        # is what plugin managers link/prune on, so a mismatch is a footgun.
+        manifest-id =
+          let
+            pkg = self.packages.${pkgs.stdenv.hostPlatform.system}.default;
+            declared = pkg.passthru.herdrPluginId;
+            fromManifest = (builtins.fromTOML (builtins.readFile ./herdr-plugin.toml)).id;
+          in
+          if declared == fromManifest then
+            pkgs.runCommand "herdr-preview-grid-manifest-id" { } ''
+              echo "plugin id: ${declared}" > $out
+            ''
+          else
+            throw "passthru.herdrPluginId (${declared}) != herdr-plugin.toml id (${fromManifest})";
 
         # Real Home Manager evaluation of the module (options merge, package
         # injection, TOML rendering) without a full home-manager build.
