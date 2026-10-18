@@ -1,0 +1,32 @@
+# herdr-preview-grid configuration (this file lives in the plugin's config
+# directory: `herdr plugin config-dir preview-grid`).
+#
+# Copy this file to the plugin config dir as `config.toml` and edit.
+
+# Letters used for jump codes. The first N items get one letter, the rest two.
+charset = "jklfds"
+
+# Master (left) list width in columns. 0 = auto: about a third of the
+# terminal, clamped to 28-42 columns.
+master_width = 0
+
+# Show the selected item's live pane preview in the detail panel.
+preview = true
+
+# Collapse blank-line runs in previews to separators (and trim edge blanks),
+# so the fixed panel height shows more real content.
+squeeze_blank_lines = true
+
+# Snapshot refresh interval (ms) while the picker is open. The selected
+# item's pane is also re-read IMMEDIATELY on every selection change.
+# Floored to 100ms; values <= 0 fall back to the default.
+refresh_ms = 1000
+
+# List order: "priority" (default: awaiting-input agents first — for spaces,
+# any pane with a blocked or done agent counts — then most-recently-jumped),
+# "usage" (MRU only), or "natural" (herdr order).
+sort = "priority"
+
+# Unknown keys are ignored, so tile-era leftovers (preview_lines,
+# preview_scale, tile_min_width, code_timeout_ms) in older config files are
+# harmless no-ops — nothing in the current code reads them.

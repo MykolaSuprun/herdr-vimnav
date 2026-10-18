@@ -1,0 +1,96 @@
+id = "preview-grid"
+name = "Preview Grid"
+version = "0.3.4"
+min_herdr_version = "0.9.3"
+description = "Master-detail switcher (list + live pane preview) for spaces or agents: fuzzy search, select-only jump codes"
+platforms = ["linux", "macos"]
+
+# Built at install time; linked dev builds can `go build -o bin/herdr-preview-grid ./cmd/herdr-preview-grid`.
+[[build]]
+command = ["sh", "-c", "CGO_ENABLED=0 go build -o bin/herdr-preview-grid ./cmd/herdr-preview-grid"]
+
+# Prefer the built binary; fall back to `go run` so a freshly linked checkout works immediately.
+# Actions run WITHOUT a TTY (like simple-switcher) — they delegate to the pane entrypoints.
+[[actions]]
+id = "spaces"
+title = "Switch space (preview grid)"
+contexts = ["workspace"]
+command = ["sh", "-c", "exec \"${HERDR_BIN_PATH:-herdr}\" plugin pane open --plugin preview-grid --entrypoint spaces"]
+
+[[actions]]
+id = "agents"
+title = "Switch agent (preview grid)"
+contexts = ["workspace"]
+command = ["sh", "-c", "exec \"${HERDR_BIN_PATH:-herdr}\" plugin pane open --plugin preview-grid --entrypoint agents"]
+
+[[panes]]
+id = "spaces"
+title = "Preview Grid"
+placement = "overlay"
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid spaces; else exec go run ./cmd/herdr-preview-grid spaces; fi"]
+
+[[panes]]
+id = "agents"
+title = "Preview Grid"
+placement = "overlay"
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid agents; else exec go run ./cmd/herdr-preview-grid agents; fi"]
+
+# Record navigation activity into the MRU ledger (feeds the priority sort's
+# "recently active"). Focus events fire for ALL navigation from ANY client —
+# keybindings, sidebar, clicks — so the ledger tracks real usage, not just
+# picker jumps. Hooks run with cwd = plugin root.
+[[events]]
+on = "workspace.focused"
+command = ["./bin/herdr-preview-grid", "record"]
+
+[[events]]
+on = "pane.focused"
+command = ["./bin/herdr-preview-grid", "record"]
+
+# Keep the sidebar's $jump codes in sync with the live layout. [[startup]]
+# covers the initial population and server restarts (which wipe reported
+# tokens); the [[events]] hooks below cover add/delete/move/reorder while the
+# server runs. sync-codes is a full re-list + diff, so bursts of events
+# converge to one consistent assignment. Hooks run with cwd = plugin root.
+[[startup]]
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "workspace.created"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "workspace.closed"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "workspace.moved"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "workspace.renamed"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "workspace.reordered"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "pane.created"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "pane.closed"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "pane.exited"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "pane.moved"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
+
+[[events]]
+on = "pane.agent_detected"
+command = ["./bin/herdr-preview-grid", "sync-codes"]
