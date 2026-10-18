@@ -1,13 +1,38 @@
-# herdr-preview-grid
+# herdr-vimnav
 
-A [herdr](https://herdr.dev) plugin: a **master-detail switcher** for spaces
-(workspaces) and agents — a list of items with the selected one's live pane
-preview alongside — plus **sidebar jump codes**: every space/agent row in the
+**Master-detail switcher for [herdr](https://herdr.dev)** — pick a space or
+agent from a live, preformatted list and watch its pane while you decide.
+
+<p align="center"><img src="docs/screenshots/spaces.png" width="820" alt="Preview Grid in spaces mode: master list with jump-code badges, attention count and cwd hints; live pane preview panel with ANSI colors"></p>
+
+A herdr plugin: a **master-detail switcher** for spaces (workspaces) and
+agents — a list of items with the selected one's live pane preview
+alongside — plus **sidebar jump codes**: every space/agent row in the
 native sidebar carries a code badge (kept in sync automatically), and
 `prefix+f` opens a tiny popup that jumps to whatever code you type.
 
 Inside the picker: walk the list with `ctrl+j/k` (or arrows), fuzzy-search
 with `/`, and type a code to select its item — `enter` switches.
+
+```sh
+herdr plugin install MykolaSuprun/herdr-vimnav
+```
+
+The plugin registers as `preview-grid`; bind `prefix+w` / `prefix+a` (see
+[Install](#install)).
+
+## Demo
+
+`prefix+a` — agents, with the same layout and preview panel:
+
+<p align="center"><img src="docs/screenshots/agents.png" width="820" alt="Preview Grid in agents mode: agent list with per-item accent badges and live preview"></p>
+
+Both screenshots are rendered from the built-in demo server
+(`tools/demo-server`), which serves a curated layout over the plugin's
+socket protocol — no live herdr session (or private workspace names)
+involved. To regenerate: run the demo server, point `HERDR_SOCKET_PATH` at
+it, capture the pane with `tmux capture-pane -e`, render the SGR through
+any ANSI→HTML converter, and screenshot headless Chromium.
 
 ## Features
 
@@ -73,18 +98,19 @@ with `/`, and type a code to select its item — `enter` switches.
 
 ## Install
 
-From GitHub (builds automatically at install time):
+From GitHub (builds automatically at install time — needs Go, see
+[Requirements](#requirements)):
 
 ```sh
-herdr plugin install <owner>/herdr-preview-grid
+herdr plugin install MykolaSuprun/herdr-vimnav
 ```
 
 Local development (no build step at link time; the plugin falls back to
 `go run` if `./bin/herdr-preview-grid` is missing):
 
 ```sh
-git clone <repo> ~/workspaces/src/herdr-preview-grid
-cd ~/workspaces/src/herdr-preview-grid
+git clone https://github.com/MykolaSuprun/herdr-vimnav.git
+cd herdr-vimnav
 CGO_ENABLED=0 go build -o bin/herdr-preview-grid ./cmd/herdr-preview-grid
 herdr plugin link "$PWD"
 ```
@@ -162,7 +188,7 @@ Standard herdr plugin anatomy:
   Go binary.
 - The binary talks to the running herdr server over `$HERDR_SOCKET_PATH`
   (newline-delimited JSON, one request per connection) for state
-  (`workspace.list`, `tab.list`, `pane.list`, `agent.list`), previews
+  (`workspace.list`, `pane.list`, `agent.list`), previews
   (`pane.read` with `format = "ansi"`), and focus (`workspace.focus`,
   `agent.focus`).
 - MRU state is persisted to `$HERDR_PLUGIN_STATE_DIR/mru.json`; the sidebar
@@ -187,3 +213,11 @@ Manual smoke test inside herdr: `herdr plugin action invoke preview-grid.spaces`
 Sidebar: add a throwaway space (`herdr workspace create --label tmp --cwd /tmp`)
 and watch the badges re-space via the hooks, then close it; `herdr plugin log
 list` shows the `sync-codes` runs.
+
+UI work without a live session: `go run ./tools/demo-server /tmp/herdr-demo.sock`
+serves a curated layout; point `HERDR_SOCKET_PATH` at the socket and run the
+binary (or open the plugin linked from this checkout) against it.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

@@ -56,6 +56,11 @@ prefix+f ([[keys.command]] popup)
   assignment, `jumpcodes.json` state, diff-based `Sync` (reports only changed
   tokens), prefix `Match` for the popup.
 - `internal/config/` — flat `config.toml` parser (top-level keys only).
+- `tools/demo-server/` — fake herdr socket server serving a curated layout
+  (singles + pair codes, 4-digit number, duplicate labels, attention items,
+  ANSI previews) for screenshots/demos and UI work without a live session.
+- `docs/screenshots/` — committed PNGs rendered from the demo server
+  (tmux `capture-pane -e` → ANSI→HTML → headless Chromium).
 
 ## Key Facts
 
@@ -102,7 +107,7 @@ prefix+f ([[keys.command]] popup)
 ```sh
 go build ./...            # compile
 go vet ./...              # static checks
-go test ./...             # unit tests (app, codes, config, jump, mru)
+go test ./...             # unit tests (app, codes, config, herdr, jump, mru, cmd)
 CGO_ENABLED=0 go build -o bin/herdr-preview-grid ./cmd/herdr-preview-grid
 herdr plugin link "$PWD"  # register with the running herdr (no build step in link)
 herdr plugin action invoke preview-grid.spaces   # live smoke test

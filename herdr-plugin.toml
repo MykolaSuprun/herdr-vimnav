@@ -1,8 +1,8 @@
 id = "preview-grid"
 name = "Preview Grid"
-version = "0.3.4"
+version = "0.4.0"
 min_herdr_version = "0.9.3"
-description = "Master-detail switcher (list + live pane preview) for spaces or agents: fuzzy search, select-only jump codes"
+description = "Master-detail switcher for spaces or agents: live pane previews, fuzzy search, MRU priority sort, sidebar jump codes"
 platforms = ["linux", "macos"]
 
 # Built at install time; linked dev builds can `go build -o bin/herdr-preview-grid ./cmd/herdr-preview-grid`.
@@ -38,14 +38,16 @@ command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herd
 # Record navigation activity into the MRU ledger (feeds the priority sort's
 # "recently active"). Focus events fire for ALL navigation from ANY client —
 # keybindings, sidebar, clicks — so the ledger tracks real usage, not just
-# picker jumps. Hooks run with cwd = plugin root.
+# picker jumps. Hooks run with cwd = plugin root. Hook commands use the same
+# binary-or-`go run` fallback as the panes, so a linked checkout without a
+# built binary degrades to `go run` instead of dying silently.
 [[events]]
 on = "workspace.focused"
-command = ["./bin/herdr-preview-grid", "record"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid record; else exec go run ./cmd/herdr-preview-grid record; fi"]
 
 [[events]]
 on = "pane.focused"
-command = ["./bin/herdr-preview-grid", "record"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid record; else exec go run ./cmd/herdr-preview-grid record; fi"]
 
 # Keep the sidebar's $jump codes in sync with the live layout. [[startup]]
 # covers the initial population and server restarts (which wipe reported
@@ -53,44 +55,44 @@ command = ["./bin/herdr-preview-grid", "record"]
 # server runs. sync-codes is a full re-list + diff, so bursts of events
 # converge to one consistent assignment. Hooks run with cwd = plugin root.
 [[startup]]
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "workspace.created"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "workspace.closed"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "workspace.moved"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "workspace.renamed"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "workspace.reordered"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "pane.created"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "pane.closed"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "pane.exited"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "pane.moved"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
 
 [[events]]
 on = "pane.agent_detected"
-command = ["./bin/herdr-preview-grid", "sync-codes"]
+command = ["sh", "-c", "if [ -x ./bin/herdr-preview-grid ]; then exec ./bin/herdr-preview-grid sync-codes; else exec go run ./cmd/herdr-preview-grid sync-codes; fi"]
