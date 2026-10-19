@@ -113,7 +113,9 @@ Two facts make this work and must not regress:
 
 - **Layout serves both install paths.** Store root = `herdr-plugin.toml` +
   `bin/herdr-preview-grid` (so `herdr plugin link <store path>` works; link
-  never runs `[[build]]`), plus `share/herdr/plugins/<id> -> ../../../..` for
+  never runs `[[build]]`), plus `share/herdr/plugins/<id> -> ../../..` (THREE
+  ups — four would overshoot to /nix/store; live-caught in the container
+  E2E, pinned by checks.layout) for
   generic Nix modules. `postInstall` must NOT re-install the binary —
   buildGoModule already put it in `$out/bin` (`test -x` guards it).
 - **Nix is the only Go-free install path.** `herdr plugin install` needs git +

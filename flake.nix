@@ -60,7 +60,11 @@
             install -Dm644 README.md $out/share/doc/herdr-preview-grid/README.md
             install -Dm644 config.example.toml $out/share/doc/herdr-preview-grid/config.example.toml
             mkdir -p $out/share/herdr/plugins
-            ln -s ../../../.. $out/share/herdr/plugins/${manifest.id}
+            # THREE ups from share/herdr/plugins/<id> back to the package
+            # root — four would overshoot to /nix/store (live-caught by the
+            # container E2E when herdr plugin link hit ENOENT). Pinned by
+            # checks.layout below via readlink -f equality.
+            ln -s ../../.. $out/share/herdr/plugins/${manifest.id}
           '';
 
           # Nix-aware plugin contract: lets `programs.herdr-hpm` entries be a
@@ -100,6 +104,22 @@
             ''
           else
             throw "passthru.herdrPluginId (${declared}) != herdr-plugin.toml id (${fromManifest})";
+
+        # Store-layout contract: the share/herdr/plugins/<id> symlink must
+        # resolve back to the package root. readlink -f equality — the exact
+        # invariant `herdr plugin link` needs (a wrong up-count overshoots and
+        # link dies with ENOENT; live-caught by the container E2E).
+        layout = pkgs.runCommand "herdr-preview-grid-layout" { } ''
+          pkg=${self.packages.${pkgs.stdenv.hostPlatform.system}.default}
+          root=$(readlink -f "$pkg/share/herdr/plugins/preview-grid")
+          if [ "$root" != "$pkg" ]; then
+            echo "layout broken: share/herdr/plugins/preview-grid resolves to $root, not $pkg" >&2
+            exit 1
+          fi
+          test -f "$root/herdr-plugin.toml"
+          test -x "$root/bin/herdr-preview-grid"
+          touch $out
+        '';
 
         # Real Home Manager evaluation of the module (options merge, package
         # injection, TOML rendering) without a full home-manager build.
