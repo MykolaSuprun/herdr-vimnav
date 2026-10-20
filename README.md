@@ -282,10 +282,36 @@ On first run, copy `config.example.toml` into the plugin config dir
 | `preview` | `true` | Render the selected item's live pane snapshot in the detail panel |
 | `refresh_ms` | `1000` | Snapshot refresh interval while open, floored to 100ms (`≤0` → default; selection moves re-read immediately on top) |
 | `sort` | `priority` | `"priority"` (awaiting-input first, then MRU), `"usage"` (MRU), or `"natural"` (herdr order) |
+| `theme` | `follow` | `"follow"` (mirror herdr's theme — see below), or pin `"latte"` / `"mocha"` |
 
 Unknown keys are ignored, so tile-era leftovers (`preview_lines`,
 `preview_scale`, `tile_min_width`, `code_timeout_ms`) from old configs are
 harmless no-ops — nothing in the current code reads them.
+
+## Theming
+
+`theme = "follow"` (the default) makes the picker mirror herdr:
+
+- **Palette** — the picker reads herdr's `~/.config/herdr/config.toml`
+  `[theme]` tables: `name`, `auto_switch`, `light_name`/`dark_name`
+  (Catppuccin Latte/Mocha are embedded; both halves of `auto_switch` pairs
+  work), plus `[theme.custom]` (and its `.light`/`.dark` variants) tokens —
+  `panel_bg`, `subtext0`/`overlay1`, `accent`, `red`, `green`, `blue`,
+  `peach` — mapped onto the picker's colors.
+- **Light/dark** — herdr keys `auto_switch` off the host terminal's
+  appearance and sets the pane's color scheme accordingly; the picker asks
+  the terminal (bubbletea's `BackgroundColorMsg`), so it flips in lockstep
+  with herdr, mid-session included.
+- **Accents stay yours** — per-item identity hues are hash-stable, and the
+  light/dark palettes keep the same hue *family* per index: a space keeps
+  its color across opens and appearance flips.
+- Force one palette with `theme = "latte"` or `theme = "mocha"`.
+
+Two honest limitations (upstream herdr exposes no theme env var and no theme
+RPC on its socket — everything above is read at picker launch): non-catppuccin
+named themes fall back to the appearance-matched Catppuccin pair, and unknown
+or unparseable values are ignored rather than guessed — the picker never
+renders unstyled.
 
 ## Keys
 

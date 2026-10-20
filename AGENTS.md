@@ -97,10 +97,24 @@ prefix+f ([[keys.command]] popup)
   wash-padded) number(3-4, right, dim) label(flex)
   dim cwd, then a pinned rail (status dot + focused flag). Numbers: spaces use
   `ws.Number`; agents best-effort member-workspace number (blank on a failed
-  fetch). Selected-row wash = `washColor` (latte base blended 12% toward the
-  item's accent); badge background = `chipBg` (same blend at 45% — badges keep
-  their hue but read soft; full-intensity accent is glare). Header counts
-  `AwaitingInput` items ("N attention").
+  fetch). Selected-row wash = `styles.washColor` (palette base blended 12%
+  toward the item's accent); badge background = `styles.chipBg` (same blend
+  at 55% toward base — badges keep their hue but read soft; full-intensity
+  accent is glare). Header counts `AwaitingInput` items ("N attention").
+- **Theming follows herdr** (`internal/theme`, resolved in `app.New` +
+  re-resolved on `tea.BackgroundColorMsg`): palette precedence = plugin
+  `theme` key ("follow" default | "latte" | "mocha") → herdr config.toml
+  `[theme]` (`name`/`auto_switch` `dark_name`/`light_name`; Unknown
+  appearance keeps the startup `name`, mirroring herdr) → `[theme.custom]`
+  (+ `.light`/`.dark` when `auto_switch`, mapped tokens: `panel_bg`
+  `subtext0`/`overlay1` `accent` `red` `green` `blue` `peach`). Only
+  Catppuccin Latte/Mocha are embedded (hue-aligned accent lists — index N
+  = same hue family in both, so item identities survive flips); other named
+  themes fall back to the appearance-matched pair. herdr's config is parsed
+  by a bounded TOML-subset reader (NO new Go deps — vendor hash must stay
+  untouched); invalid values are ignored, never brick the UI. Every render
+  hex flows from `Model.s()` (zero-Model falls back to latte) — view tests
+  pin the latte values via a package-wide `loadHerdrSpec` stub.
 
 ## Nix packaging
 

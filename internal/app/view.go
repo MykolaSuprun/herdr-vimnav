@@ -8,6 +8,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
+	"github.com/MykolaSuprun/herdr-preview-grid/internal/theme"
 )
 
 // layout describes the master-detail split: a master list on the left, a
@@ -109,15 +111,40 @@ func (m *Model) ensureVisible() {
 
 // --- view -------------------------------------------------------------------
 
+// Colourless shared styles keep package scope; everything palette-derived is
+// rebuilt per render via Model.s so appearance flips (tea.BackgroundColorMsg)
+// repaint without touching state.
 var (
-	headerStyle    = lipgloss.NewStyle().Bold(true)
-	dimStyle       = lipgloss.NewStyle().Faint(true)
-	errStyle       = lipgloss.NewStyle().Foreground(lipgloss.Color("#f38ba8"))
-	onStyle        = lipgloss.NewStyle().Foreground(lipgloss.Color("#89b4fa")).Bold(true)
-	markerStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("#1e66f5")).Bold(true)
-	focusedStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("#40a02b")).Bold(true)
-	attentionStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#d20f39")).Bold(true)
+	headerStyle = lipgloss.NewStyle().Bold(true)
+	dimStyle    = lipgloss.NewStyle().Faint(true)
 )
+
+// styles holds the palette-derived text styles.
+type styles struct {
+	pal                                 theme.Palette
+	err, on, marker, focused, attention lipgloss.Style
+}
+
+func newStyles(pal theme.Palette) styles {
+	return styles{
+		pal:       pal,
+		err:       lipgloss.NewStyle().Foreground(lipgloss.Color(pal.Err)),
+		on:        lipgloss.NewStyle().Foreground(lipgloss.Color(pal.On)).Bold(true),
+		marker:    lipgloss.NewStyle().Foreground(lipgloss.Color(pal.Marker)).Bold(true),
+		focused:   lipgloss.NewStyle().Foreground(lipgloss.Color(pal.Focused)).Bold(true),
+		attention: lipgloss.NewStyle().Foreground(lipgloss.Color(pal.Attention)).Bold(true),
+	}
+}
+
+// s returns the render styles for the model's resolved palette. A zero-value
+// Model (unit tests constructing Model{}) falls back to the historical latte
+// palette so nothing renders unstyled.
+func (m Model) s() styles {
+	if m.pal.Base == "" {
+		return newStyles(theme.Latte())
+	}
+	return newStyles(m.pal)
+}
 
 // View implements tea.Model.
 func (m Model) View() tea.View {
@@ -145,15 +172,15 @@ func (m Model) render() string {
 	}
 	header := headerStyle.Render("◆ " + title)
 	if attn > 0 {
-		header += attentionStyle.Render(" · " + strconv.Itoa(attn) + " attention")
+		header += m.s().attention.Render(" · " + strconv.Itoa(attn) + " attention")
 	}
 	if m.filterActive {
 		header += "  " + dimStyle.Render("search: ") + m.search + "█"
 	} else if m.codeBuf != "" {
-		header += "  " + onStyle.Render("code: "+m.codeBuf+"…")
+		header += "  " + m.s().on.Render("code: "+m.codeBuf+"…")
 	}
 	if m.errMsg != "" {
-		header += "  " + errStyle.Render(m.errMsg)
+		header += "  " + m.s().err.Render(m.errMsg)
 	}
 	b.WriteString(header)
 	b.WriteString("\n")
@@ -201,12 +228,13 @@ func (m Model) renderList(l layout) string {
 // line. The selected row carries a faint background wash blended toward the
 // item's accent hue.
 func (m Model) renderListRow(idx, w int) string {
+	st := m.s()
 	it := m.items[idx]
 	selected := idx == m.cursor
-	accent := accentFor(it)
+	accent := st.accentFor(it)
 	wash := ""
 	if selected {
-		wash = washColor(accent)
+		wash = st.washColor(accent)
 	}
 
 	// Column widths: the number column is data-sized (3 normally, 4 when a
@@ -224,9 +252,9 @@ func (m Model) renderListRow(idx, w int) string {
 
 	marker := withWash(lipgloss.NewStyle(), wash).Render("  ")
 	if selected {
-		marker = withWash(markerStyle, wash).Render("▌ ")
+		marker = withWash(st.marker, wash).Render("▌ ")
 	}
-	chip := chips(code, accent)
+	chip := st.chips(code, accent)
 	if gap := chipW - lipgloss.Width(chip); gap > 0 {
 		chip += withWash(lipgloss.NewStyle(), wash).Render(strings.Repeat(" ", gap))
 	}
@@ -257,12 +285,12 @@ func (m Model) renderListRow(idx, w int) string {
 
 	// Right rail: status dot, gap, focused flag — never moves.
 	dot := withWash(
-		lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor(it.Status))),
+		lipgloss.NewStyle().Foreground(lipgloss.Color(st.statusColor(it.Status))),
 		wash,
 	).Render("●")
 	flag := withWash(lipgloss.NewStyle(), wash).Render(" ")
 	if it.Focused {
-		flag = withWash(focusedStyle, wash).Render("●")
+		flag = withWash(st.focused, wash).Render("●")
 	}
 	rail := withWash(lipgloss.NewStyle(), wash).Render(" ") + dot +
 		withWash(lipgloss.NewStyle(), wash).Render(" ") + flag
@@ -285,14 +313,15 @@ func (m Model) renderDetail(l layout) string {
 	if want < 1 {
 		want = 1
 	}
-	accent := "#6c6f85" // neutral until an item is selected
+	st := m.s()
+	accent := st.pal.NeutralAccent // no-selection placeholder until an item lands
 	var lines []string
 
 	if len(m.items) == 0 {
 		lines = append(lines, dimStyle.Render("(no items)"))
 	} else {
 		it := m.items[m.cursor]
-		accent = accentFor(it)
+		accent = st.accentFor(it)
 		code := ""
 		if m.cursor < len(m.table) {
 			code = string(m.table[m.cursor])
@@ -305,7 +334,7 @@ func (m Model) renderDetail(l layout) string {
 		if lipgloss.Width(plain) > inner {
 			title = accentStyle(accent, true).Render(truncateANSI(plain, inner))
 		} else {
-			title = chips(code, accent) + " " +
+			title = st.chips(code, accent) + " " +
 				accentStyle(accent, true).Render(it.Label) +
 				dimStyle.Render(" · "+it.Status+" · "+it.Kind)
 		}
@@ -338,25 +367,18 @@ func (m Model) renderDetail(l layout) string {
 		Render(strings.Join(lines, "\n"))
 }
 
-// catppuccinAccents are the identity hues for per-item accents. LATTE-family
-// colors: saturated and readable on the user's light (latte) terminal — the
-// earlier mocha set washed out on light backgrounds. Indexed by a stable
-// hash of the item key, so a space keeps its color across opens.
-var catppuccinAccents = []string{
-	"#dc8a78", "#dd7878", "#ea76cb", "#8839ef", "#d20f39", "#e64553",
-	"#fe640b", "#df8e1d", "#40a02b", "#179299", "#04a5e5", "#209fb5",
-	"#1e66f5", "#7287fd",
-}
-
-// accentFor picks an item's identity accent: a deterministic Catppuccin hue
-// derived from the item's stable key.
-func accentFor(it Item) string {
+// accentFor picks an item's identity accent: a deterministic hue derived
+// from the item's stable key. The palette's accent list keeps a stable order
+// (and the light/dark pairs keep the same hue family per index — see
+// internal/theme), so a space keeps its color across opens AND appearance
+// flips.
+func (s styles) accentFor(it Item) string {
 	var h uint32 = 2166136261 // FNV-1a offset basis
 	for _, r := range it.Key {
 		h ^= uint32(r)
 		h *= 16777619
 	}
-	return catppuccinAccents[int(h)%len(catppuccinAccents)]
+	return s.pal.Accents[int(h)%len(s.pal.Accents)]
 }
 
 // accentStyle is the helper for accent-tinted text (label, title).
@@ -369,22 +391,23 @@ func accentStyle(accent string, bold bool) lipgloss.Style {
 }
 
 // chipStyle is the jump-code badge: the accented background — softened
-// toward the latte base (same hue, lower intensity) — with dark text.
+// toward the palette base (same hue, lower intensity) — with contrast text.
 // Full-intensity accent read as glare down a column of badges.
-func chipStyle(accent string) lipgloss.Style {
+func (s styles) chipStyle(accent string) lipgloss.Style {
 	return lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#1e1e2e")).
-		Background(lipgloss.Color(chipBg(accent))).
+		Foreground(lipgloss.Color(s.pal.ChipFg)).
+		Background(lipgloss.Color(s.chipBg(accent))).
 		Bold(true)
 }
 
-// chipBg softens an accent toward the latte base (55% of the way): the badge
-// keeps its identity hue at ~45% intensity — readable dark text, no glare.
-func chipBg(accent string) string {
+// chipBg softens an accent toward the palette base (55% of the way): the
+// badge keeps its identity hue at ~45% intensity — readable chip text, no
+// glare.
+func (s styles) chipBg(accent string) string {
 	if _, _, _, ok := splitHexColor(accent); !ok {
-		return "#eff1f5"
+		return s.pal.Base
 	}
-	return blendHex(accent, "#eff1f5", 0.55)
+	return blendHex(accent, s.pal.Base, 0.55)
 }
 
 // chips renders the code badge exactly as wide as the code: a single letter
@@ -393,8 +416,8 @@ func chipBg(accent string) string {
 // tight ("uj") as one uninterrupted block, triples likewise ("uuu"). Each
 // glyph occupies its own cell. Callers pad the 4-cell chip column with the
 // row wash.
-func chips(code, accent string) string {
-	return chipStyle(accent).Render(code)
+func (s styles) chips(code, accent string) string {
+	return s.chipStyle(accent).Render(code)
 }
 
 // withWash layers the selected-row wash background onto a segment style
@@ -407,14 +430,14 @@ func withWash(base lipgloss.Style, wash string) lipgloss.Style {
 	return base.Background(lipgloss.Color(wash))
 }
 
-// washColor is the selected-row wash: the Catppuccin latte base faintly
-// blended toward the item's accent hue. An explicit hex keeps the wash stable
-// across terminal profiles; a broken accent falls back to the plain base.
-func washColor(accent string) string {
+// washColor is the selected-row wash: the palette base faintly blended
+// toward the item's accent hue. An explicit hex keeps the wash stable across
+// terminal profiles; a broken accent falls back to the plain base.
+func (s styles) washColor(accent string) string {
 	if _, _, _, ok := splitHexColor(accent); !ok {
-		return "#eff1f5"
+		return s.pal.Base
 	}
-	return blendHex("#eff1f5", accent, 0.12) // base, 12% toward the accent
+	return blendHex(s.pal.Base, accent, 0.12) // base, 12% toward the accent
 }
 
 // blendHex mixes two #rrggbb colors channel-wise: t=0 keeps a, t=1 returns b.
@@ -444,20 +467,20 @@ func splitHexColor(hex string) (r, g, b int, ok bool) {
 }
 
 // statusColor maps a herdr agent_status to its semantic color: working
-// peach, blocked red, done green, idle blue, unknown/empty gray. LATTE-family
-// hexes — saturated and readable on light terminals (mocha hexes washed out).
-func statusColor(status string) string {
+// peach, blocked red, done green, idle blue, unknown/empty gray — all from
+// the resolved palette so flips follow herdr.
+func (s styles) statusColor(status string) string {
 	switch strings.ToLower(strings.TrimSpace(status)) {
 	case "working":
-		return "#fe640b"
+		return s.pal.Working
 	case "blocked":
-		return "#d20f39"
+		return s.pal.Blocked
 	case "done":
-		return "#40a02b"
+		return s.pal.Done
 	case "idle":
-		return "#1e66f5"
+		return s.pal.IdleStatus
 	default:
-		return "#6c6f85"
+		return s.pal.NeutralAccent
 	}
 }
 

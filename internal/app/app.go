@@ -15,6 +15,7 @@ import (
 	"github.com/MykolaSuprun/herdr-preview-grid/internal/config"
 	"github.com/MykolaSuprun/herdr-preview-grid/internal/herdr"
 	"github.com/MykolaSuprun/herdr-preview-grid/internal/mru"
+	"github.com/MykolaSuprun/herdr-preview-grid/internal/theme"
 
 	"github.com/sahilm/fuzzy"
 )
@@ -72,13 +73,21 @@ type Model struct {
 	scroll     int               // first visible list row (item index)
 	errMsg     string
 	seeded     bool // ledger focus-seed done once per open
-	cursorInit bool // initial cursor placement done once per open
+	spec       theme.Spec
+	pal        theme.Palette // resolved at New + on every BackgroundColorMsg
+	cursorInit bool          // initial cursor placement done once per open
 }
 
 // New constructs the model. selfPane is this process's own herdr pane
 // (HERDR_PANE_ID) and launchPane the pane the picker pane was launched over
 // (HERDR_PLUGIN_CONTEXT_JSON); both may be empty outside herdr.
 func New(mode Mode, cfg config.Config, client *herdr.Client, ledger *mru.Ledger, stateDir, selfPane, launchPane string) Model {
+	// Theming: read herdr's [theme] tables once; appearance is Unknown until
+	// the hosting terminal answers tea.BackgroundColorMsg (Init requests it).
+	// Indirection exists for tests: pinned-colour tests stub the loader so
+	// they never depend on the developer's own herdr config.
+	spec := loadHerdrSpec(theme.HerdrConfigPath())
+	spec.PluginTheme = cfg.Theme
 	return Model{
 		mode:       mode,
 		cfg:        cfg,
@@ -88,12 +97,21 @@ func New(mode Mode, cfg config.Config, client *herdr.Client, ledger *mru.Ledger,
 		selfPane:   selfPane,
 		launchPane: launchPane,
 		previews:   map[string]string{},
+		spec:       spec,
+		pal:        theme.Resolve(spec, theme.Unknown),
 	}
 }
 
-// Init loads the first snapshot.
+// loadHerdrSpec is theme.LoadSpec, indirected for deterministic tests.
+var loadHerdrSpec = theme.LoadSpec
+
+// Init loads the first snapshot and asks the terminal for its background so
+// the palette can follow herdr's light/dark appearance.
 func (m Model) Init() tea.Cmd {
-	return func() tea.Msg { return refreshMsg{} }
+	return tea.Batch(
+		func() tea.Msg { return refreshMsg{} },
+		func() tea.Msg { return tea.RequestBackgroundColor() },
+	)
 }
 
 type refreshMsg struct{}
@@ -111,6 +129,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reload()
 		m.refreshPreviews()
 		return m, tea.Tick(time.Duration(m.cfg.RefreshMS)*time.Millisecond, func(time.Time) tea.Msg { return refreshMsg{} })
+
+	case tea.BackgroundColorMsg:
+		// herdr keys its auto_switch off the host terminal's appearance and
+		// sets our pane's colour scheme accordingly, so this flips the
+		// palette in lockstep with herdr. Washes/styles derive from m.pal at
+		// render time — nothing else to recompute.
+		app := theme.Light
+		if msg.IsDark() {
+			app = theme.Dark
+		}
+		m.pal = theme.Resolve(m.spec, app)
+		return m, nil
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)

@@ -27,6 +27,13 @@ refresh_ms = 1000
 # "usage" (MRU only), or "natural" (herdr order).
 sort = "priority"
 
+# Theme: "follow" (default) mirrors herdr — the picker reads herdr's
+# config.toml [theme] (name/dark_name/light_name/auto_switch and any
+# [theme.custom] tokens) and flips light/dark in lockstep with herdr's
+# auto_switch (it sets our pane's color scheme). Force "latte" or "mocha"
+# to pin one regardless of herdr and the terminal.
+theme = "follow"
+
 # Unknown keys are ignored, so tile-era leftovers (preview_lines,
 # preview_scale, tile_min_width, code_timeout_ms) in older config files are
 # harmless no-ops — nothing in the current code reads them.

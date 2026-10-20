@@ -9,7 +9,13 @@ import (
 
 	"github.com/MykolaSuprun/herdr-preview-grid/internal/codes"
 	"github.com/MykolaSuprun/herdr-preview-grid/internal/config"
+	"github.com/MykolaSuprun/herdr-preview-grid/internal/theme"
 )
+
+// latte is the pinned palette for helper-level assertions: the package-wide
+// loader stub resolves Unknown appearance to latte, so every rendered hex
+// below must match the historical values exactly.
+var latte = newStyles(theme.Latte())
 
 func TestStripANSI(t *testing.T) {
 	in := "\x1b[31mred\x1b[0m plain \x1b]0;title\x07after"
@@ -88,8 +94,8 @@ func TestStatusColor(t *testing.T) {
 		"": "#6c6f85", "unknown": "#6c6f85", "zzz": "#6c6f85",
 	}
 	for in, want := range cases {
-		if got := statusColor(in); got != want {
-			t.Errorf("statusColor(%q) = %q, want %q", in, got, want)
+		if got := latte.statusColor(in); got != want {
+			t.Errorf("latte.statusColor(%q) = %q, want %q", in, got, want)
 		}
 	}
 }
@@ -97,7 +103,7 @@ func TestStatusColor(t *testing.T) {
 func TestAccentForDeterminism(t *testing.T) {
 	// Palette sanity: unique, saturated latte-family hues.
 	seen := map[string]bool{}
-	for _, c := range catppuccinAccents {
+	for _, c := range theme.Latte().Accents {
 		if seen[c] {
 			t.Errorf("duplicate accent hue %q", c)
 		}
@@ -106,16 +112,16 @@ func TestAccentForDeterminism(t *testing.T) {
 	a := Item{Key: "workspace:w15"}
 	b := Item{Key: "workspace:w15"}
 	c := Item{Key: "workspace:w16"}
-	if accentFor(a) != accentFor(b) {
+	if latte.accentFor(a) != latte.accentFor(b) {
 		t.Errorf("same key must map to same accent")
 	}
-	if accentFor(a) == accentFor(c) {
+	if latte.accentFor(a) == latte.accentFor(c) {
 		// Not a hard requirement (hash collision), but 14 hues make it
 		// vanishingly unlikely for different keys; guards accidental constant.
-		t.Logf("w15 and w16 share accent %q", accentFor(a))
+		t.Logf("w15 and w16 share accent %q", latte.accentFor(a))
 	}
 	for _, k := range []string{"workspace:w1", "agent:wA:p2T", "workspace:wZ"} {
-		if !strings.HasPrefix(accentFor(Item{Key: k}), "#") {
+		if !strings.HasPrefix(latte.accentFor(Item{Key: k}), "#") {
 			t.Errorf("accent not a hex color for %q", k)
 		}
 	}
@@ -260,7 +266,7 @@ func TestRenderListRow(t *testing.T) {
 	}
 	// The wash rides on the selected row only, as a truecolor background
 	// fragment (lipgloss rewrites the hex into SGR parameters).
-	w0, w1 := washColor(accentFor(m.items[0])), washColor(accentFor(m.items[1]))
+	w0, w1 := latte.washColor(latte.accentFor(m.items[0])), latte.washColor(latte.accentFor(m.items[1]))
 	r, g, b, _ := splitHexColor(w0)
 	frag := fmt.Sprintf("48;2;%d;%d;%d", r, g, b)
 	if !strings.Contains(row, frag) {
@@ -370,22 +376,22 @@ func TestNumberColumnDataSized(t *testing.T) {
 
 // The wash hex is stable, distinct from base and accent, and falls back.
 func TestWashColor(t *testing.T) {
-	c := washColor("#8839ef")
+	c := latte.washColor("#8839ef")
 	if len(c) != 7 || c[0] != '#' {
 		t.Fatalf("not hex: %q", c)
 	}
 	if c == "#8839ef" || c == "#eff1f5" {
 		t.Fatalf("degenerate wash: %q", c)
 	}
-	if again := washColor("#8839ef"); again != c {
+	if again := latte.washColor("#8839ef"); again != c {
 		t.Fatalf("unstable wash: %q vs %q", again, c)
 	}
 	// Exact pin: latte base with 12% of #209fb5 — guards the blend
 	// direction (an inverted helper renders a saturated row).
-	if got := washColor("#209fb5"); got != "#d6e7ed" {
-		t.Fatalf("washColor(#209fb5) = %q, want #d6e7ed", got)
+	if got := latte.washColor("#209fb5"); got != "#d6e7ed" {
+		t.Fatalf("latte.washColor(#209fb5) = %q, want #d6e7ed", got)
 	}
-	if got := washColor("zzz"); got != "#eff1f5" {
+	if got := latte.washColor("zzz"); got != "#eff1f5" {
 		t.Fatalf("bad accent should fall back to the base: %q", got)
 	}
 }
@@ -393,10 +399,10 @@ func TestWashColor(t *testing.T) {
 // The badge background keeps its hue at ~45% intensity: latte base with 55%
 // of #209fb5 — readable, and pinned exactly so the blend can't flip.
 func TestChipBgSoftensAccent(t *testing.T) {
-	if got := chipBg("#209fb5"); got != "#92ccd8" {
-		t.Fatalf("chipBg(#209fb5) = %q, want #92ccd8", got)
+	if got := latte.chipBg("#209fb5"); got != "#92ccd8" {
+		t.Fatalf("latte.chipBg(#209fb5) = %q, want #92ccd8", got)
 	}
-	if got := chipBg("zzz"); got != "#eff1f5" {
+	if got := latte.chipBg("zzz"); got != "#eff1f5" {
 		t.Fatalf("bad accent = %q, want base", got)
 	}
 }
@@ -405,7 +411,7 @@ func TestChipBgSoftensAccent(t *testing.T) {
 // no lopsided colored blanks — emitted as one uninterrupted color run.
 func TestChipInkTight(t *testing.T) {
 	const accent = "#209fb5"
-	cr, cg, cb, _ := splitHexColor(chipBg(accent))
+	cr, cg, cb, _ := splitHexColor(latte.chipBg(accent))
 	chipFrag := fmt.Sprintf("48;2;%d;%d;%d", cr, cg, cb)
 
 	for _, tt := range []struct {
@@ -416,12 +422,12 @@ func TestChipInkTight(t *testing.T) {
 		{"uj", 2},
 		{"uuu", 3},
 	} {
-		got := chips(tt.code, accent)
+		got := latte.chips(tt.code, accent)
 		if lipgloss.Width(got) != tt.wantW {
-			t.Fatalf("chips(%q) width = %d, want %d", tt.code, lipgloss.Width(got), tt.wantW)
+			t.Fatalf("latte.chips(%q) width = %d, want %d", tt.code, lipgloss.Width(got), tt.wantW)
 		}
 		if n := strings.Count(got, chipFrag); n != 1 {
-			t.Fatalf("chips(%q) = %d color runs, want 1 (one uninterrupted block)", tt.code, n)
+			t.Fatalf("latte.chips(%q) = %d color runs, want 1 (one uninterrupted block)", tt.code, n)
 		}
 	}
 }

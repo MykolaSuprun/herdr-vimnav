@@ -19,6 +19,7 @@ type Config struct {
 	RefreshMS         int    // snapshot refresh interval
 	Sort              string // "priority" (default) | "usage" | "natural"
 	Preview           bool   // show live pane previews
+	Theme             string // "follow" (default: mirror herdr's theme) | "latte" | "mocha"
 }
 
 // Default returns the defaults used when no config file exists.
@@ -30,6 +31,7 @@ func Default() Config {
 		RefreshMS:         1000,
 		Sort:              "priority",
 		Preview:           true,
+		Theme:             "follow",
 	}
 }
 
@@ -97,6 +99,11 @@ func Load(configDir string) Config {
 			}
 		case "preview":
 			cfg.Preview = value == "true" || value == "1"
+		case "theme":
+			switch value {
+			case "follow", "herdr", "latte", "mocha":
+				cfg.Theme = value
+			}
 		}
 	}
 	if cfg.Charset == "" {
