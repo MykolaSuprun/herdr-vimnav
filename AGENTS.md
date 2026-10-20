@@ -26,9 +26,16 @@ herdr keybinding ([[keys.command]] plugin_action)
 
 layout change or server start
   → [[startup]] / [[events]] hook runs ./bin/herdr-preview-grid sync-codes   (no TTY)
-  → socket: workspace.list / agent.list → diff vs jumpcodes.json
+  → socket: workspace.list / agent.list → canonical codes (Entries, no state)
   → workspace.report_metadata / pane.report_metadata (source user:jumpd, token jump=<code>)
   → sidebar rows render $jump badges
+  NOTE: reports are UNCONDITIONAL on every pass (no diff vs jumpcodes.json —
+  herdr does not persist plugin metadata across server restarts while the
+  state file survives them; a diff masked exactly the stable workspace ids
+  and spaces lost their badges on every restart until 0.4.1; pinned by
+  TestSyncReReportsEverythingAfterServerRestart). jumpcodes.json is only an
+  audit mirror (plus code-stability debugging aid); Entries() derives codes
+  deterministically from the layout.
 
 prefix+f ([[keys.command]] popup)
   → popup runs ./bin/herdr-preview-grid jump   (TTY)

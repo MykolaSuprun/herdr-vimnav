@@ -1,6 +1,6 @@
 id = "preview-grid"
 name = "Preview Grid"
-version = "0.4.0"
+version = "0.4.1"
 min_herdr_version = "0.9.3"
 description = "Master-detail switcher for spaces or agents: live pane previews, fuzzy search, MRU priority sort, sidebar jump codes"
 platforms = ["linux", "macos"]

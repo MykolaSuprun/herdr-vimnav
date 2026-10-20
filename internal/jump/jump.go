@@ -58,7 +58,10 @@ func Entries(spaces []herdr.Workspace, agents []herdr.Agent, charset string) []E
 	return out
 }
 
-// State is the last reported mapping, used to report only changed tokens.
+// State is the audit mirror of the last successfully reported mapping.
+// Entries() assigns codes deterministically from the layout — this file
+// exists so operators can see what the sidebar should carry, not to gate
+// reporting (see Sync for why reporting is unconditional).
 type State struct {
 	Spaces map[string]string `json:"spaces"`
 	Agents map[string]string `json:"agents"`
@@ -135,11 +138,16 @@ type api interface {
 	ReportPaneMetadata(paneID, source string, tokens map[string]string) error
 }
 
-// Sync (re)assigns codes for the live layout and reports changed tokens.
-// Individual report failures don't abort the pass; the first error is
-// returned so callers can surface it in the plugin log. A code is recorded
-// in the state only once its report SUCCEEDED — failed reports stay
-// unreported and are retried by the next diff pass.
+// Sync (re)assigns codes for the live layout and re-reports EVERY token on
+// every pass. herdr does not persist plugin metadata across server
+// restarts, but this state file (and the codes) survive them — a diff-based
+// "report only changes" pass therefore skipped exactly the stable
+// workspace ids whose server-side badges a restart had wiped, and they
+// never came back until a code happened to change. Tokens are idempotent
+// (single Source, replace semantics), so unconditionally re-reporting
+// self-heals the sidebar within one sync of any restart. The first report
+// error is returned so callers can surface it; failed reports stay out of
+// the state so the mirror shows only confirmed tokens.
 func Sync(client api, st *State, charset string) ([]Entry, error) {
 	spaces, err := client.Workspaces()
 	if err != nil {
@@ -164,9 +172,6 @@ func Sync(client api, st *State, charset string) ([]Entry, error) {
 		switch e.Kind {
 		case KindWorkspace:
 			seenSpaces[e.ID] = true
-			if st.Spaces[e.ID] == e.Code {
-				continue
-			}
 			if err := client.ReportWorkspaceMetadata(e.ID, Source, tokens); err != nil {
 				note(err)
 				continue
@@ -174,9 +179,6 @@ func Sync(client api, st *State, charset string) ([]Entry, error) {
 			st.Spaces[e.ID] = e.Code
 		case KindAgent:
 			seenAgents[e.ID] = true
-			if st.Agents[e.ID] == e.Code {
-				continue
-			}
 			if err := client.ReportPaneMetadata(e.ID, Source, tokens); err != nil {
 				note(err)
 				continue

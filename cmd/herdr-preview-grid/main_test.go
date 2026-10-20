@@ -130,13 +130,15 @@ func TestSyncCodesModeEndToEnd(t *testing.T) {
 		t.Fatalf("pass 1 reports = %d, want 2 (%v)", firstPass, reports)
 	}
 
-	// Second pass: diff-based, nothing changed → no re-reports.
+	// Second pass: nothing changed, but herdr wipes plugin metadata on
+	// every server restart while this state file survives — so sync
+	// re-reports ALL tokens unconditionally (self-heal within one pass).
 	if err := syncCodesMode(); err != nil {
 		t.Fatalf("syncCodesMode pass 2: %v", err)
 	}
 	mu.Lock()
 	defer mu.Unlock()
-	if len(reports) != firstPass {
-		t.Fatalf("pass 2 re-reported %d unchanged tokens", len(reports)-firstPass)
+	if len(reports) != 2*firstPass {
+		t.Fatalf("pass 2 re-reports = %d, want %d (full unconditional re-report)", len(reports)-firstPass, firstPass)
 	}
 }

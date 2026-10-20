@@ -67,15 +67,26 @@ func TestSyncRetriesFailedReports(t *testing.T) {
 		t.Fatalf("agent reports missing from state: %+v", st.Agents)
 	}
 
-	// Pass 2: every report succeeds. Only the two failed workspaces are
-	// re-reported (diff-based); already-known codes are skipped.
+	// Pass 2: every report succeeds. Reporting is now unconditional (herdr
+	// does not persist plugin metadata across server restarts, so a diff
+	// against the surviving local state would always skip exactly what a
+	// restart wiped server-side) — ALL tokens re-report, state unchanged
+	// or not.
 	second := layout
 	if _, err := Sync(&second, st, charset); err != nil {
 		t.Fatalf("pass 2 failed: %v", err)
 	}
-	if want := []string{"w1=j", "w2=k"}; len(second.accepted) != len(want) ||
-		second.accepted[0] != want[0] || second.accepted[1] != want[1] {
+	want := []string{}
+	for _, e := range Entries(layout.workspaces, layout.agents, charset) {
+		want = append(want, e.ID+"="+e.Code)
+	}
+	if len(second.accepted) != len(want) {
 		t.Fatalf("pass 2 re-reports = %v, want %v", second.accepted, want)
+	}
+	for i := range want {
+		if second.accepted[i] != want[i] {
+			t.Fatalf("pass 2 re-reports = %v, want %v", second.accepted, want)
+		}
 	}
 
 	// Final state must carry the full canonical assignment.
@@ -89,6 +100,44 @@ func TestSyncRetriesFailedReports(t *testing.T) {
 		}
 		if got != e.Code {
 			t.Fatalf("state %s = %q, want %q", e.ID, got, e.Code)
+		}
+	}
+}
+
+// Regression for the 2026-10-20 outage: herdr does not persist plugin
+// metadata across server restarts while jumpcodes.json survives on disk.
+// The old diff ("skip when state says already reported") meant stable
+// workspace ids never re-reported after a restart — the sidebar lost
+// every spaces badge while agent badges recovered via pane churn.
+func TestSyncReReportsEverythingAfterServerRestart(t *testing.T) {
+	layout := stubAPI{
+		workspaces: []herdr.Workspace{{WorkspaceID: "w1"}, {WorkspaceID: "w2"}},
+		agents:     []herdr.Agent{{PaneID: "p1"}},
+	}
+	const charset = "jk"
+
+	// State as left by the last sync BEFORE the restart: everything
+	// recorded as successfully reported.
+	st := &State{
+		Spaces: map[string]string{"w1": "j", "w2": "k"},
+		Agents: map[string]string{"p1": "jk"},
+	}
+
+	// Fresh server (metadata wiped). Sync must re-report ALL tokens even
+	// though the local state claims nothing changed.
+	if _, err := Sync(&layout, st, charset); err != nil {
+		t.Fatalf("sync after restart failed: %v", err)
+	}
+	want := []string{}
+	for _, e := range Entries(layout.workspaces, layout.agents, charset) {
+		want = append(want, e.ID+"="+e.Code)
+	}
+	if len(layout.accepted) != len(want) {
+		t.Fatalf("post-restart re-reports = %v, want %v", layout.accepted, want)
+	}
+	for i := range want {
+		if layout.accepted[i] != want[i] {
+			t.Fatalf("post-restart re-reports = %v, want %v", layout.accepted, want)
 		}
 	}
 }
