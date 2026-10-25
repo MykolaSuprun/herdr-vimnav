@@ -11,7 +11,10 @@
 //     what makes the priority sort's "recently active" real.
 //   - "sync-codes": one-shot sync of the sidebar $jump badges with the live
 //     layout (wired to the [[startup]] hook and layout-change events).
-//   - "jump": tiny popup — type a sidebar code, focus moves, Esc cancels.
+//   - "jump": tiny popup — type a code (spaces, agents, tabs, and plain
+//     panes all carry one; complete codes fire instantly), '/' fuzzy-searches
+//     labels, Esc cancels. Opening it tags the active space's tabs with
+//     their codes; any fire (or a cancel) restores the labels.
 package main
 
 import (

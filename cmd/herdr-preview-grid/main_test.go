@@ -16,8 +16,9 @@ import (
 
 // jumpMode (the popup TUI) is deliberately not covered here: it drives a
 // Bubble Tea program through the TTY lifecycle, and its decision logic
-// (Match/Entries) lives in — and is covered by — internal/jump. The
-// env-driven non-TUI modes get full coverage below.
+// (Match/Entries/Collect) lives in — and is covered by — internal/jump;
+// its pure view helpers are covered in jump_test.go. The env-driven non-TUI
+// modes get full coverage below.
 
 func TestRecordModeTouchesLedger(t *testing.T) {
 	dir := t.TempDir()
@@ -120,7 +121,7 @@ func TestSyncCodesModeEndToEnd(t *testing.T) {
 		t.Fatalf("syncCodesMode pass 1: %v", err)
 	}
 	st := jump.LoadState(stateDir)
-	if st.Spaces["w9"] != "j" || st.Agents["p1"] != "k" {
+	if st.Spaces["w9"] != "sd" || st.Agents["p1"] != "sf" {
 		t.Fatalf("state wrong: %+v", st)
 	}
 	mu.Lock()

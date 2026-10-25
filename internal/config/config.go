@@ -25,7 +25,7 @@ type Config struct {
 // Default returns the defaults used when no config file exists.
 func Default() Config {
 	return Config{
-		Charset:           "jklfds",
+		Charset:           "sdfjklerui",
 		MasterWidth:       0,
 		SqueezeBlankLines: true,
 		RefreshMS:         1000,

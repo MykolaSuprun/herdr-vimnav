@@ -127,6 +127,18 @@ type Agent struct {
 	TerminalTitle string `json:"terminal_title_stripped"`
 }
 
+// Tab mirrors one entry of tab.list (workspace-major; unnamed tabs carry
+// their number as the label, like herdr's own UI).
+type Tab struct {
+	TabID       string `json:"tab_id"`
+	WorkspaceID string `json:"workspace_id"`
+	Label       string `json:"label"`
+	Number      int    `json:"number"`
+	PaneCount   int    `json:"pane_count"`
+	AgentStatus string `json:"agent_status"`
+	Focused     bool   `json:"focused"`
+}
+
 type workspaceList struct {
 	Workspaces []Workspace `json:"workspaces"`
 }
@@ -137,6 +149,10 @@ type paneList struct {
 
 type agentList struct {
 	Agents []Agent `json:"agents"`
+}
+
+type tabList struct {
+	Tabs []Tab `json:"tabs"`
 }
 
 type paneRead struct {
@@ -170,6 +186,35 @@ func (c *Client) Agents() ([]Agent, error) {
 		return nil, err
 	}
 	return out.Agents, nil
+}
+
+// Tabs returns all tabs across workspaces (tab.list is workspace-major).
+func (c *Client) Tabs() ([]Tab, error) {
+	var out tabList
+	if err := c.Call("tab.list", nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Tabs, nil
+}
+
+// FocusTab focuses a tab.
+func (c *Client) FocusTab(id string) error {
+	return c.Call("tab.focus", map[string]any{"tab_id": id}, nil)
+}
+
+// RenameTab sets a tab's label. Used by the jump popup to carry codes on the
+// tabs while it is open (herdr 0.9.5 has no tab-metadata surface); the
+// original labels are restored on the way out.
+func (c *Client) RenameTab(id, label string) error {
+	return c.Call("tab.rename", map[string]any{"tab_id": id, "label": label}, nil)
+}
+
+// FocusPane focuses a pane directly (schema: PaneTarget{pane_id}; present in
+// herdr 0.9.5's bundled API even though the online method table omits it).
+// Callers on older servers should degrade on error, e.g. to FocusTab of the
+// pane's tab.
+func (c *Client) FocusPane(id string) error {
+	return c.Call("pane.focus", map[string]any{"pane_id": id}, nil)
 }
 
 // ReadPane returns the pane's rendered output (optionally ANSI).

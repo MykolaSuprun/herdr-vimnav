@@ -1,52 +1,31 @@
-// Package codes assigns short jump codes (1-3 letters) to grid items, and
-// resolves typed input against them.
+// Package codes assigns short jump codes (2 letters, then 3) to grid items,
+// and resolves typed input against them.
 //
 // Codes are prefix-free by construction: no code is a proper prefix of
-// another code. Single letters come from the configured charset; every
-// longer code starts with an "initiator" letter drawn from a disjoint set
-// (the top-row mirror of the default charset). Typed input therefore never
-// needs a disambiguation timeout: a buffer is either a complete code (fire
-// immediately), a live prefix (keep typing), or a dead end (reject).
+// another code. With a ten-letter pool that means:
+//
+//   - tier 1 — every ordered pair of DISTINCT pool letters ("sd", "sf", …):
+//     10 × 9 = 90 codes. No single-letter codes exist, so a one-letter buffer
+//     is always a live prefix.
+//   - tier 2 — three-letter codes with a DOUBLED first letter ("ssd",
+//     "ssf", …): 10 × 9 = 90 more. A pair never repeats a letter, so "ss" is
+//     not a pair — and that is exactly what keeps tier 2 prefix-free: no
+//     tier-1 code can be a prefix of a tier-2 code (whose first two letters
+//     repeat). 180 codewords in total, all firing the moment they complete.
+//
+// Typed input therefore never needs a disambiguation timeout: a buffer is
+// either a complete code (fire immediately), a live prefix (keep typing), or
+// a dead end (reject).
 package codes
 
 import "strings"
 
-// DefaultCharset is the home-row-adjacent set used for single-letter codes.
-const DefaultCharset = "jklfds"
-
-// DefaultInitiators is the first-letter set for multi-letter codes: the
-// top-row mirror of DefaultCharset (j→u k→i l→o f→r d→e s→w), so pair codes
-// read as "the key above" + a single letter.
-const DefaultInitiators = "uiorew"
+// DefaultCharset is the ten-letter pool used for jump codes: the home row
+// plus its neighbours (s d f j k l) and the inner top row (e r u i).
+const DefaultCharset = "sdfjklerui"
 
 // Code is a single assigned jump code.
 type Code string
-
-// Initiators returns the letters that may begin a multi-letter code for the
-// given single-letter charset: DefaultInitiators minus any charset overlap,
-// with a fallback alphabet for exotic charsets. Guaranteeing
-// charset ∩ initiators = ∅ is what makes the table prefix-free.
-func Initiators(charset string) string {
-	used := map[rune]bool{}
-	for _, r := range charset {
-		used[r] = true
-	}
-	var b strings.Builder
-	for _, r := range DefaultInitiators {
-		if !used[r] {
-			b.WriteRune(r)
-		}
-	}
-	if b.Len() > 0 {
-		return b.String()
-	}
-	for r := 'a'; r <= 'z'; r++ {
-		if !used[r] {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
 
 // uniqueRunes keeps the first occurrence of each rune in charset. Codes
 // must differ between rows, so a duplicated letter ("jj") would otherwise
@@ -66,46 +45,46 @@ func uniqueRunes(charset string) []rune {
 
 // Table assigns codes to n items drawn from charset. Prefix-free:
 //
-//   - the first len(charset) items get one letter;
-//   - the next len(Initiators)*len(charset) get pairs (initiator + letter);
-//   - anything beyond that gets triples (initiator + initiator + letter).
+//   - the first len(letters)*(len(letters)-1) items get ordered pairs of
+//     distinct letters ("sd", "sf", …) — 90 with the default pool;
+//   - the rest get doubled-first triples ("ssd", "ssf", …) — another 90,
+//     continuing after the pairs.
 //
-// With the defaults that is 6 + 36 + 216 codewords — far beyond any real
-// layout.
+// Callers beyond 180 items get a truncated table: every code stays unique
+// and prefix-free, and the overflow items simply have no code.
 func Table(n int, charset string) []Code {
-	if n <= 0 || charset == "" {
+	if n <= 0 {
 		return nil
 	}
 	letters := uniqueRunes(charset)
-	init := []rune(Initiators(charset))
+	if len(letters) < 2 {
+		return nil // a single letter cannot yield a prefix-free pair tier
+	}
 	out := make([]Code, 0, n)
 
-	// Single letters first.
-	for _, r := range letters {
-		if len(out) == n {
-			return out
-		}
-		out = append(out, Code(string(r)))
-	}
-	// Then pairs: initiator + letter (initiator-major, so each initiator
-	// block reads as a group).
-	for _, a := range init {
+	// Tier 1: ordered pairs of distinct letters, first letter major.
+	for _, a := range letters {
 		for _, b := range letters {
+			if a == b {
+				continue // "ss" is reserved for the tier-2 doubled prefix
+			}
 			if len(out) == n {
 				return out
 			}
 			out = append(out, Code(string([]rune{a, b})))
 		}
 	}
-	// Deep layouts only: triples, initiator + initiator + letter.
-	for _, a := range init {
-		for _, b := range init {
-			for _, c := range letters {
-				if len(out) == n {
-					return out
-				}
-				out = append(out, Code(string([]rune{a, b, c})))
+	// Tier 2: doubled first letter, then any other letter. Prefix-free
+	// against tier 1 because no pair repeats its first letter.
+	for _, a := range letters {
+		for _, b := range letters {
+			if a == b {
+				continue
 			}
+			if len(out) == n {
+				return out
+			}
+			out = append(out, Code(string([]rune{a, a, b})))
 		}
 	}
 	return out
@@ -147,7 +126,7 @@ func Resolve(typed string, table []Code) (idx int, ambiguous bool, ok bool) {
 	case extends:
 		return -1, false, true // keep typing
 	case prefix:
-		return -2, false, false // dead end (typed past a 1-letter code)
+		return -2, false, false // dead end (typed past a complete code)
 	default:
 		return -2, false, false
 	}

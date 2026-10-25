@@ -197,7 +197,7 @@ func testModel() Model {
 	return Model{
 		mode: ModeSpaces,
 		cfg: config.Config{
-			Charset:           "jklfds",
+			Charset:           "sdfjklerui",
 			SqueezeBlankLines: true,
 			Sort:              "priority",
 			Preview:           true,

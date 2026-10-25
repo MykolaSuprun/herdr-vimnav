@@ -151,6 +151,59 @@ func TestCallReadTimeoutIsWrapped(t *testing.T) {
 	}
 }
 
+func TestTabsDecodeLiveShape(t *testing.T) {
+	s := newStub(t, func(request) reply {
+		return reply{result: tabList{Tabs: []Tab{
+			{TabID: "wA:tC", WorkspaceID: "wA", Label: "embeddings", Number: 12, PaneCount: 2},
+			{TabID: "wA:tK", WorkspaceID: "wA", Label: "3", Number: 19, PaneCount: 2, Focused: true},
+		}}}
+	})
+	got, err := s.client.Tabs()
+	<-s.done
+	if err != nil {
+		t.Fatalf("Tabs: %v", err)
+	}
+	if s.req.Method != "tab.list" {
+		t.Fatalf("method = %q", s.req.Method)
+	}
+	// Unnamed tabs carry their number as the label, like herdr's own UI.
+	if len(got) != 2 || got[0].Label != "embeddings" || got[0].Number != 12 ||
+		got[1].Label != "3" || !got[1].Focused {
+		t.Fatalf("decoded wrong: %+v", got)
+	}
+}
+
+func TestFocusTabSendsTabID(t *testing.T) {
+	s := newStub(t, func(request) reply { return reply{result: map[string]any{}} })
+	if err := s.client.FocusTab("wA:tC"); err != nil {
+		t.Fatalf("FocusTab: %v", err)
+	}
+	<-s.done
+	if s.req.Method != "tab.focus" {
+		t.Fatalf("method = %q", s.req.Method)
+	}
+	if params, _ := s.req.Params.(map[string]any); params["tab_id"] != "wA:tC" {
+		t.Fatalf("params = %v, want tab_id wA:tC", s.req.Params)
+	}
+}
+
+func TestFocusPaneSendsPaneID(t *testing.T) {
+	s := newStub(t, func(request) reply { return reply{result: map[string]any{}} })
+	if err := s.client.FocusPane("w1:p2"); err != nil {
+		t.Fatalf("FocusPane: %v", err)
+	}
+	<-s.done
+	// pane.focus is the by-id method (PaneTarget in the bundled 0.9.5
+	// schema, absent from the online method table) — distinct from
+	// pane.focus_direction.
+	if s.req.Method != "pane.focus" {
+		t.Fatalf("method = %q", s.req.Method)
+	}
+	if params, _ := s.req.Params.(map[string]any); params["pane_id"] != "w1:p2" {
+		t.Fatalf("params = %v, want pane_id w1:p2", s.req.Params)
+	}
+}
+
 func TestReadPaneSendsRequestParams(t *testing.T) {
 	s := newStub(t, func(request) reply {
 		return reply{result: map[string]any{"read": map[string]any{"text": "$ hello"}}}

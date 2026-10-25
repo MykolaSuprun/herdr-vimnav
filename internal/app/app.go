@@ -253,16 +253,15 @@ func (m *Model) codeKey(key string, msg tea.KeyPressMsg) tea.Cmd {
 	return nil
 }
 
-// consumeCode appends a code letter to the buffer. Valid letters are the
-// charset (single-letter codes) plus the initiator set (first letter of
-// multi-letter codes) — codes are prefix-free, so both sets matter.
+// consumeCode appends a code letter to the buffer. Every code is drawn from
+// the pool itself (2 letters, then doubled-first triples), so the charset IS
+// the full valid input alphabet — no separate initiator set exists.
 func (m *Model) consumeCode(msg tea.KeyPressMsg) bool {
 	txt := printable(msg)
 	if txt == "" || utf8.RuneCountInString(txt) != 1 {
 		return false
 	}
-	valid := m.cfg.Charset + codes.Initiators(m.cfg.Charset)
-	if !strings.ContainsRune(valid, []rune(txt)[0]) {
+	if !strings.ContainsRune(m.cfg.Charset, []rune(txt)[0]) {
 		return false
 	}
 	m.codeBuf += txt

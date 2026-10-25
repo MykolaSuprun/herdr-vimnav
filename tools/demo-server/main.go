@@ -2,8 +2,8 @@
 // and manual UI checks without touching a live session. It speaks the same
 // newline-delimited JSON protocol the plugin's client expects (one request per
 // connection) and serves a curated layout: 10 spaces (so jump codes show both
-// singles and pairs), a 4-digit number, duplicate labels, two attention items,
-// and ANSI-rich pane content.
+// pair codes and the triple tier), a 4-digit number, duplicate labels, two multi-tab spaces
+// (tabs carry codes too), two attention items, and ANSI-rich pane content.
 //
 // Usage:
 //
@@ -43,40 +43,73 @@ var spaces = []ws{
 }
 
 type pane struct {
-	id, ws, title string
-	cwd, fgCwd    string
-	agent, status string
-	focus         bool
+	id, ws, tab, title string
+	cwd, fgCwd         string
+	agent, status      string
+	focus              bool
 }
 
+// Tabs exist as a hierarchy level (workspace → tab → pane); live herdr
+// serves unnamed tabs with their number as the label, so the fixture mixes
+// named and unnamed tabs across two multi-tab spaces.
+type demoTab struct {
+	id, ws, label string
+	num           int
+}
+
+var tabs = []demoTab{
+	{"w1:t1", "w1", "editor", 21},
+	{"w2:t1", "w2", "main", 22},
+	{"w2:t2", "w2", "logs", 23},
+	{"w3:t1", "w3", "1", 24},
+	{"w4:t1", "w4", "1", 25},
+	{"w5:t1", "w5", "1", 26},
+	{"w6:t1", "w6", "dev", 27},
+	{"w7:t1", "w7", "1", 28},
+	{"w8:t1", "w8", "1", 29},
+	{"w9:t1", "w9", "1", 30},
+	{"w10:t1", "w10", "obsidian", 31},
+	{"w10:t2", "w10", "raw", 32},
+}
+
+// Pane ids are workspace-scoped (w2:p3 — never tab-qualified), matching
+// herdr's public id grammar; the tab field carries the hierarchy level.
+// Agent fields mirror agent.list so the popup's pane section (plain panes
+// only) has an honest fixture to exclude.
 var panes = []pane{
-	{"w1:p1", "w1", "vim src/config.go", "/home/dev/archives/old/nixvim", "/home/dev/workspaces/src/nixvim", "", "", true},
-	{"w2:p1", "w2", "herdr ▸ plugin pane open …", "/home/dev/workspaces/src/herdr", "", "", "", true},
-	{"w3:p1", "w3", "npm run dev", "/home/dev/workspaces/src/docs-site", "", "", "", true},
-	{"w4:p1", "w4", "zsh", "/home/dev/archive", "", "", "", true},
-	{"w5:p1", "w5", "claude ▸ refactor parser", "/home/dev/workspaces/src/nixvim", "", "claude-code", "blocked", true},
-	{"w6:p1", "w6", "openclaw ▸ run", "/home/dev/workspaces/src/openclaw", "", "opencode", "done", true},
-	{"w7:p1", "w7", "rg -n 'agent.detected' ~/workspaces", "/home/dev/workspaces/src/herdr-research", "", "claude-code", "working", true},
-	{"w8:p1", "w8", "quickshell", "/home/dev/workspaces/src/qs-flow", "", "", "", true},
-	{"w9:p1", "w9", "git rebase -i main", "/home/dev/dotfiles/nixvim", "", "", "", true},
-	{"w10:p1", "w10", "obsidian ▸ task_backlog", "/home/dev/Documents/vaults/general-1", "", "", "", true},
-	{"w10:p2", "w10", "tail -f plugin.log", "/home/dev/Documents/vaults/general-1", "", "", "", false},
+	{"w1:p1", "w1", "w1:t1", "vim src/config.go", "/home/dev/archives/old/nixvim", "/home/dev/workspaces/src/nixvim", "", "", true},
+	{"w1:p2", "w1", "w1:t1", "aider", "/home/dev/workspaces/src/nixvim", "", "aider", "idle", false},
+	{"w2:p1", "w2", "w2:t1", "herdr ▸ plugin pane open …", "/home/dev/workspaces/src/herdr", "", "", "", true},
+	{"w2:p2", "w2", "w2:t1", "golangci-lint run ./…", "/home/dev/workspaces/src/herdr-preview-grid", "/home/dev/workspaces/src/herdr", "opencode", "working", false},
+	{"w2:p3", "w2", "w2:t2", "tail -f plugin.log", "/home/dev/workspaces/src/herdr-preview-grid", "", "", "", false},
+	{"w3:p1", "w3", "w3:t1", "npm run dev", "/home/dev/workspaces/src/docs-site", "", "", "", true},
+	{"w3:p2", "w3", "w3:t1", "npm test", "/home/dev/workspaces/src/docs-site", "", "gemini-cli", "idle", false},
+	{"w4:p1", "w4", "w4:t1", "zsh", "/home/dev/archive", "", "", "", true},
+	{"w5:p1", "w5", "w5:t1", "claude ▸ refactor parser", "/home/dev/workspaces/src/nixvim", "", "claude-code", "blocked", true},
+	{"w6:p1", "w6", "w6:t1", "openclaw ▸ run", "/home/dev/workspaces/src/openclaw", "", "opencode", "done", true},
+	{"w7:p1", "w7", "w7:t1", "rg -n 'agent.detected' ~/workspaces", "/home/dev/workspaces/src/herdr-research", "", "claude-code", "working", true},
+	{"w8:p1", "w8", "w8:t1", "quickshell", "/home/dev/workspaces/src/qs-flow", "", "", "", true},
+	{"w8:p2", "w8", "w8:t1", "bun run dev", "/home/dev/workspaces/src/qs-flow", "", "crush", "", false},
+	{"w9:p1", "w9", "w9:t1", "git rebase -i main", "/home/dev/dotfiles/nixvim", "", "", "", true},
+	{"w9:p2", "w9", "w9:t1", "droid", "/home/dev/dotfiles/nixvim", "", "droid", "working", false},
+	{"w10:p1", "w10", "w10:t1", "obsidian ▸ task_backlog", "/home/dev/Documents/vaults/general-1", "", "", "", true},
+	{"w10:p2", "w10", "w10:t2", "tail -f plugin.log", "/home/dev/Documents/vaults/general-1", "", "", "", false},
 }
 
 type agent struct {
-	paneID, wsID, name, display, status, cwd, title string
-	focus                                           bool
+	paneID, wsID, tab, name, display, status, cwd, title string
+	focus                                                bool
 }
 
 var agents = []agent{
-	{"w5:p1", "w5", "claude-code", "claude", "blocked", "/home/dev/workspaces/src/nixvim", "refactor parser ▸ 3 tests left", false},
-	{"w6:p1", "w6", "opencode", "", "done", "/home/dev/workspaces/src/openclaw", "session summary ready", false},
-	{"w7:p1", "w7", "claude-code", "", "working", "/home/dev/workspaces/src/herdr-research", "rg agent.detected …", false},
-	{"w2:p2", "w2", "opencode", "oc", "working", "/home/dev/workspaces/src/herdr-preview-grid", "golangci-lint run ./…", true},
-	{"w1:p2", "w1", "aider", "", "idle", "/home/dev/workspaces/src/nixvim", "", false},
-	{"w3:p2", "w3", "gemini-cli", "", "idle", "/home/dev/workspaces/src/docs-site", "", false},
-	{"w8:p2", "w8", "crush", "", "", "/home/dev/workspaces/src/qs-flow", "", false},
-	{"w9:p2", "w9", "droid", "factory", "working", "/home/dev/dotfiles/nixvim", "rebase -i main", false},
+	{"w5:p1", "w5", "w5:t1", "claude-code", "claude", "blocked", "/home/dev/workspaces/src/nixvim", "refactor parser ▸ 3 tests left", false},
+	{"w6:p1", "w6", "w6:t1", "opencode", "", "done", "/home/dev/workspaces/src/openclaw", "session summary ready", false},
+	{"w7:p1", "w7", "w7:t1", "claude-code", "", "working", "/home/dev/workspaces/src/herdr-research", "rg agent.detected …", false},
+	{"w2:p2", "w2", "w2:t1", "opencode", "oc", "working", "/home/dev/workspaces/src/herdr-preview-grid", "golangci-lint run ./…", true},
+	{"w1:p2", "w1", "w1:t1", "aider", "", "idle", "/home/dev/workspaces/src/nixvim", "", false},
+	{"w3:p2", "w3", "w3:t1", "gemini-cli", "", "idle", "/home/dev/workspaces/src/docs-site", "", false},
+	{"w8:p2", "w8", "w8:t1", "crush", "", "", "/home/dev/workspaces/src/qs-flow", "", false},
+	{"w9:p2", "w9", "w9:t1", "droid", "factory", "working", "/home/dev/dotfiles/nixvim", "rebase -i main", false},
 }
 
 // previewText is the pane content returned by pane.read. The first block is
@@ -128,16 +161,28 @@ func handle(line []byte) map[string]any {
 		for _, w := range spaces {
 			list = append(list, map[string]any{
 				"workspace_id": w.id, "number": w.num, "label": w.label,
-				"focused": w.focus, "pane_count": 2, "tab_count": 1,
-				"active_tab_id": w.id + ":t1", "agent_status": w.status,
+				"focused":       w.focus,
+				"pane_count":    countPanes(w.id),
+				"tab_count":     countTabs(w.id),
+				"active_tab_id": activeTab(w.id), "agent_status": w.status,
 			})
 		}
 		return map[string]any{"id": req.ID, "result": map[string]any{"workspaces": list}}
+	case "tab.list":
+		list := make([]map[string]any, 0, len(tabs))
+		for _, t := range tabs {
+			list = append(list, map[string]any{
+				"tab_id": t.id, "workspace_id": t.ws, "label": t.label,
+				"number": t.num, "pane_count": countPanesInTab(t.id),
+				"agent_status": tabStatus(t.id), "focused": t.id == "w2:t1",
+			})
+		}
+		return map[string]any{"id": req.ID, "result": map[string]any{"tabs": list}}
 	case "pane.list":
 		list := make([]map[string]any, 0, len(panes))
 		for _, p := range panes {
 			list = append(list, map[string]any{
-				"pane_id": p.id, "workspace_id": p.ws, "tab_id": p.ws + ":t1",
+				"pane_id": p.id, "workspace_id": p.ws, "tab_id": p.tab,
 				"focused": p.focus, "cwd": p.cwd, "foreground_cwd": p.fgCwd,
 				"agent": p.agent, "agent_status": p.status,
 				"terminal_title_stripped": p.title,
@@ -149,7 +194,7 @@ func handle(line []byte) map[string]any {
 		for _, a := range agents {
 			list = append(list, map[string]any{
 				"agent": a.name, "display_agent": a.display, "agent_status": a.status,
-				"pane_id": a.paneID, "workspace_id": a.wsID, "tab_id": a.wsID + ":t1",
+				"pane_id": a.paneID, "workspace_id": a.wsID, "tab_id": a.tab,
 				"cwd": a.cwd, "focused": a.focus, "terminal_title_stripped": a.title,
 			})
 		}
@@ -164,6 +209,68 @@ func handle(line []byte) map[string]any {
 	default: // focus/report calls: accept and ignore (read-only demo)
 		return map[string]any{"id": req.ID, "result": map[string]any{}}
 	}
+}
+
+// --- fixture roll-ups (one source of truth per fact) ------------------------
+
+func countPanes(ws string) int {
+	n := 0
+	for _, p := range panes {
+		if p.ws == ws {
+			n++
+		}
+	}
+	return n
+}
+
+func countTabs(ws string) int {
+	n := 0
+	for _, t := range tabs {
+		if t.ws == ws {
+			n++
+		}
+	}
+	return n
+}
+
+// activeTab mirrors herdr: the workspace's first tab (fallback synthetic id
+// for spaces the tabs fixture somehow missed).
+func activeTab(ws string) string {
+	for _, t := range tabs {
+		if t.ws == ws {
+			return t.id
+		}
+	}
+	return ws + ":t1"
+}
+
+func countPanesInTab(tabID string) int {
+	n := 0
+	for _, p := range panes {
+		if p.tab == tabID {
+			n++
+		}
+	}
+	return n
+}
+
+// tabStatus rolls a tab's panes up like herdr does: the most demanding
+// member state wins, plain-shell tabs read unknown.
+func tabStatus(tabID string) string {
+	statuses := make([]string, 0, 2)
+	for _, p := range panes {
+		if p.tab == tabID && p.status != "" {
+			statuses = append(statuses, p.status)
+		}
+	}
+	for _, want := range []string{"blocked", "done", "working", "idle"} {
+		for _, s := range statuses {
+			if s == want {
+				return s
+			}
+		}
+	}
+	return "unknown"
 }
 
 func serve(conn net.Conn) {

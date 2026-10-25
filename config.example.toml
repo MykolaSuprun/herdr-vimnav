@@ -3,8 +3,11 @@
 #
 # Copy this file to the plugin config dir as `config.toml` and edit.
 
-# Letters used for jump codes. The first N items get one letter, the rest two.
-charset = "jklfds"
+# Letters used for jump codes. Ten-letter pool: every code is two letters
+# (ordered pairs of distinct letters, 10x9 = 90), then three-letter codes with
+# a doubled first letter once the pairs run out. Codes never use a single
+# letter, so the first keystroke is always a live prefix.
+charset = "sdfjklerui"
 
 # Master (left) list width in columns. 0 = auto: about a third of the
 # terminal, clamped to 28-42 columns.

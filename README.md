@@ -11,9 +11,12 @@ to select — `enter` switches, and the sidebar follows.*
 
 A herdr plugin: a **master-detail switcher** for spaces (workspaces) and
 agents — a list of items with the selected one's live pane preview
-alongside — plus **sidebar jump codes**: every space/agent row in the
-native sidebar carries a code badge (kept in sync automatically), and
-`prefix+f` opens a tiny popup that jumps to whatever code you type.
+alongside — plus **jump codes**: every space/agent row in the native
+sidebar carries a code badge (kept in sync automatically), and tabs and
+plain panes carry codes too. `prefix+f` (or a direct chord like
+`ctrl+shift+e` — "shift+prefix", see
+[Keybindings](#keybindings)) opens a tiny popup that jumps to whatever
+code you type, with a live listing of every target and its code.
 
 Inside the picker: walk the list with `ctrl+j/k` (or arrows), fuzzy-search
 with `/`, and type a code to select its item — `enter` switches.
@@ -76,21 +79,45 @@ regenerate: see [Development](#development).
   `working`, red `blocked`, green `done`, blue `idle`, gray unknown/none.
 - **Walk the list**: `ctrl+j/k` plus `↓`/`↑`, `pgup`/`pgdn`, `ctrl+u`/`ctrl+d`,
   `home`/`end`. Bare letters are reserved for codes (the code letters
-  themselves are `j k l f d s`, which is why stepping uses ctrl chords).
+  themselves are `s d f j k l e r u i`, which is why stepping uses ctrl chords).
 - **Fuzzy search**: `/` opens the search field; type to filter, `esc` clears.
-- **Select-only jump codes** — every row shows a 1–2 letter code from
-  `jklfds`. Prefix-free by construction (six singles `j k l f d s`, then
-  pairs `uj uk ul …`), so a code completes in one keystroke and fires
-  immediately — no ambiguity timeout. Typing a complete code moves the
+- **Select-only jump codes** — every row shows a 2-letter code from the
+  ten-letter pool `sdfjklerui` (ordered pairs of distinct letters: 90 of
+  them), extending to 3-letter codes with a doubled first letter (`ssd`,
+  `ssf`, …) once pairs run out. Never a single letter, and prefix-free by
+  construction, so a code fires the instant it completes — no ambiguity
+  timeout. Typing a complete code moves the
   selection (the preview follows); `backspace` edits the code buffer;
   `enter` commits the switch. A code alone never focuses anything.
 - **Sidebar jump codes** — the native sidebar's spaces/agents rows show a
   `$jump` badge per row (reported via `report_metadata`, source `user:jumpd`).
   Codes re-sync automatically on every layout change (create/close/move/rename/
   reorder/agent-detect) through the plugin's `[[startup]]` + `[[events]]`
-  hooks — no daemon, no manual step. `prefix+f` opens a tiny popup: type a
-  code → focus moves; `esc` cancels, `backspace` edits. Same prefix-free
-  scheme as the picker.
+  hooks — no daemon, no manual step. `prefix+f` (or a direct chord) opens a
+  tiny popup: type a code → focus moves; `esc` cancels, `backspace` edits.
+  Same prefix-free scheme as the picker. Popups sized ~46x12 also show a
+  **live listing** of every target.
+- **Tabs and panes jump too** — the popup's table continues past spaces
+  and agents: every **tab** and every **plain (non-agent) pane** gets a
+  code from the same prefix-free sequence (spaces/agents keep exactly
+  their badge codes; big layouts extend into 3-letter codes). Tabs have no
+  sidebar row, so their codes live in the popup: it lists them (filtered
+  as you type), `/` fuzzy-searches labels, `↑/↓` walk, `enter` commits.
+  Panes jump *exactly* via `pane.focus` (herdr 0.9.5's schema — the online
+  method table omits it); an older server falls back to focusing the
+  pane's tab. Agent-hosting panes are excluded from the pane section —
+  their agent entry already jumps there with stronger semantics
+  (`agent.focus` marks the agent seen).
+- **Tab codes live on the tabs** — open the jump popup and the active
+  space's tabs are **retagged with their codes** (`wl 1`, `wf 2`); any
+  fired code (or `esc`, or a crash — the next open unwinds it) restores
+  your original labels. This is the only surface that works: herdr 0.9.5
+  has **no tab-metadata surface** (`tab.*` is create/list/get/focus/
+  rename/move/close — no `tab.report_metadata`), so the tab bar renders
+  nothing but the tab's own label, and a polled `tab_bar_right` command
+  segment (>=1 s interval) can never catch a popup that lives a few
+  hundred milliseconds. Labels are saved to `tab-tags.json` before
+  rewriting, so user-renamed tabs come back exactly as they were.
 - **Priority order** — attention-first: agents that are `blocked`
   (approval/question dialog) or `done` (finished but not yet viewed) lead,
   both MRU-ordered; everything else — idle, working, unknown — interleaves
@@ -146,9 +173,9 @@ puts each plugin's `bin` on `home.sessionPath` — so keybindings run
 key = "prefix+f"
 type = "popup"
 command = "herdr-preview-grid jump"
-width = 44
-height = 3
-description = "jump to sidebar code"
+width = 46
+height = 12
+description = "jump to code"
 ```
 
 Without the manager this flake also exports its own module
@@ -164,7 +191,7 @@ Without the manager this flake also exports its own module
     # ~/.config/herdr/plugins/config/preview-grid/config.toml
     # (empty = your file is left untouched)
     settings = {
-      charset = "jklfds";
+      charset = "sdfjklerui";
       master_width = 0;
     };
   };
@@ -213,13 +240,14 @@ description = "switch agent (preview grid)"
 
 # Sidebar jump codes (badges are maintained by the plugin's hooks).
 # The popup runs the built binary directly — see "Keybindings" for the path.
+# 46x12 fits the live listing; 44x3 still works (one visible row).
 [[keys.command]]
 key = "prefix+f"
 type = "popup"
 command = "/path/to/herdr-preview-grid/bin/herdr-preview-grid jump"
-width = 44
-height = 3
-description = "jump to sidebar code"
+width = 46
+height = 12
+description = "jump to code"
 ```
 
 Reload with `prefix+shift+r` (or `herdr server reload-config`).
@@ -257,10 +285,57 @@ find ~/.config/herdr/plugins/github-installations -name herdr-preview-grid 2>/de
 key = "prefix+f"
 type = "popup"
 command = "<that-path> jump"
-width = 44
-height = 3
-description = "jump to sidebar code"
+width = 46
+height = 12
+description = "jump to code"
 ```
+
+**One-keystroke variant (`ctrl+shift+e` = "shift+prefix").** herdr accepts
+direct chords as bindings, so you can open the same popup with a single
+press of prefix+shift:
+
+```toml
+# Direct chord — ctrl+e is this setup's [keys] prefix, so the jump chord is
+# its SHIFT twin. herdr has no symbolic "shift+prefix" form (key strings
+# are literal chords), so this line is a CONVENTION: if you ever change
+# keys.prefix, re-derive this chord by hand. Requires a terminal that
+# distinguishes ctrl+shift+e from ctrl+e (kitty-keyboard-protocol
+# terminals like Ghostty do; where they collide, this binding is inert and
+# the prefix keeps working).
+[[keys.command]]
+key = "ctrl+shift+e"
+type = "popup"
+command = "<that-path> jump"
+width = 46
+height = 12
+description = "jump to code (direct)"
+```
+
+Tab/pane codes in the popup need a herdr binary with `tab.list` and
+`pane.focus` (both are in the 0.9.5 schema, though the online method table
+omits `pane.focus`); on older servers those sections drop out and the
+popup degrades to spaces+agents.
+
+**Tab codes appear on the tabs themselves.** herdr 0.9.5 exposes no
+tab-metadata surface (`tab.*` has no `report_metadata`, and the tab bar
+renders only the tab's label), so the only way a code can live on a tab is a
+label rewrite. The jump popup does exactly that while it is open, and puts
+your labels back on the way out:
+
+- **open** (`prefix+f` or the direct `ctrl+shift+e`) → the active space's tabs
+  are relabelled `wl 1`, `wf 2`, … — the codes the popup is listing;
+- **any fired code** → labels restored, then focus moves;
+- **`esc` / ctrl+c** → labels restored;
+- **crash/kill** → the ledger survives, and the next open unwinds it before
+  tagging again (no nesting, no lost user labels);
+- **user renames are preserved** — originals are saved to `tab-tags.json`
+  *before* the rename, and that is what comes back.
+
+Nothing to configure: no `tab_bar_right` entry, no extra chord. The jump
+chord is the trigger.
+
+<!-- legacy: the polled tab_bar_right command segment was removed in 0.7.0
+     (>=1s polling can never catch a sub-second popup) -->
 
 **Apply and validate:** edit → `herdr config check` → reload (`prefix+shift+r`
 or `herdr server reload-config`). One footgun: `herdr config reset-keys` backs
@@ -277,7 +352,7 @@ On first run, copy `config.example.toml` into the plugin config dir
 
 | Key | Default | Meaning |
 |---|---|---|
-| `charset` | `jklfds` | Letters used for jump codes (1-letter for the first N rows, then pairs) |
+| `charset` | `sdfjklerui` | Ten-letter pool for jump codes: 2-letter pairs first (90), then 3-letter doubled-first codes |
 | `master_width` | `0` (auto) | Master list width in columns; `0` = about a third of the terminal, clamped to 28–42 |
 | `preview` | `true` | Render the selected item's live pane snapshot in the detail panel |
 | `refresh_ms` | `1000` | Snapshot refresh interval while open, floored to 100ms (`≤0` → default; selection moves re-read immediately on top) |
@@ -327,10 +402,25 @@ renders unstyled.
 | `esc` | clear search/filter, else close |
 | `ctrl+c` | close |
 
-Sidebar jump popup (bind e.g. `prefix+f` to
-`…/bin/herdr-preview-grid jump` as a `popup`): type a sidebar code → focus
-moves; `esc` cancels; `backspace` edits. Codes come from the same table as the
-picker.
+Sidebar jump popup (bind e.g. `prefix+f` or a direct chord — see
+[Keybindings](#keybindings) — to `…/bin/herdr-preview-grid jump` as a
+`popup`): the popup lists every jumpable target — spaces, agents, tabs,
+plain panes — with its code. A complete code fires instantly; `backspace`
+edits; `esc` cancels. With a taller popup (~12 rows):
+
+| Key | Action |
+|---|---|
+| `j k l f d s` (+ pairs, then triples) | jump code — fires the moment it completes |
+| `/` | fuzzy-search labels (kind words like `tab`/`pane` work too) |
+| `↑`/`↓`, `pgup`/`pgdn` | walk the search matches (scroll in code mode) |
+| `enter` | commit the selected search match |
+| `backspace` | edit the code buffer (or the search text) |
+| `esc` | clear the search, else close |
+| `ctrl+c` | close |
+
+Spaces and agents use exactly their sidebar badge codes; tabs and panes
+continue the same table. The badge sync + a full rebuild run at every
+popup open, so codes always match the live layout.
 
 ## How it works
 
@@ -348,11 +438,19 @@ Standard herdr plugin anatomy:
 - MRU state is persisted to `$HERDR_PLUGIN_STATE_DIR/mru.json`; the sidebar
   badge table lives next to it in `jumpcodes.json`.
 - `sync-codes` (the `[[startup]]` + layout `[[events]]` hook mode) re-lists
-  the live layout, diffs against `jumpcodes.json`, and reports only changed
-  rows as `$jump` metadata tokens (source `user:jumpd`) — badges follow every
-  create/close/move/rename/reorder automatically, with no daemon.
-- `jump` (the popup mode) resolves a typed code against the live layout and
-  calls `workspace.focus` / `agent.focus`.
+  the live **spaces+agents** layout, diffs against `jumpcodes.json`, and
+  re-reports the plugin's `$jump` metadata tokens (source `user:jumpd`) —
+  badges follow every create/close/move/rename/reorder automatically, with
+  no daemon. Tabs and panes are deliberately NOT in this pass: they have no
+  sidebar row to badge and no report to keep fresh.
+- `jump` (the popup mode) rebuilds the full table live at every open —
+  `jump.Collect` lists workspaces, agents, tabs (`tab.list`), and panes,
+  re-asserts the badges along the way, then codes everything in herdr's
+  order: spaces, agents (exactly their badge codes — the code sequence is
+  prefix-stable, so the table only grows after the badge rows), then tabs,
+  then plain panes. Codes resolve to `workspace.focus` / `agent.focus` /
+  `tab.focus` / `pane.focus`, with `tab.focus` on the pane's tab as the
+  fallback when an older server rejects `pane.focus`.
 
 ## Development
 

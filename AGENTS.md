@@ -7,10 +7,12 @@
 list (code badge, status dot, label) with the selected item's live ANSI pane
 preview in the right panel. Navigation is `ctrl+j/k` (plus arrows), fuzzy
 search is `/`, and typing a row's code selects it (select-only — `enter`
-commits the switch). It also maintains **sidebar jump codes**: `$jump` badges
+commits the switch). It also maintains **jump codes**: `$jump` badges
 on the native sidebar's spaces/agents rows (auto-synced by manifest hooks on
-every layout change) and a `jump` popup (`prefix+f`) that focuses whatever
-code you type. Implemented in Go with Bubble Tea v2 / Lip Gloss v2. MIT
+every layout change) and a `jump` popup (bound to `prefix+f` or a direct
+chord) that focuses whatever code you type — with codes covering not just
+spaces and agents but every tab and plain pane as well. Implemented in Go
+with Bubble Tea v2 / Lip Gloss v2. MIT
 licensed.
 
 ## Architecture & Data Flow
@@ -37,16 +39,26 @@ layout change or server start
   audit mirror (plus code-stability debugging aid); Entries() derives codes
   deterministically from the layout.
 
-prefix+f ([[keys.command]] popup)
+prefix+f or a direct chord ([[keys.command]] popup)
   → popup runs ./bin/herdr-preview-grid jump   (TTY)
-  → type code → workspace.focus | agent.focus → exit
+  → jump.Collect: workspace.list / agent.list / tab.list / pane.list
+    (spaces/agents errors fatal; tab/pane errors degrade the table)
+  → same pass re-asserts badges (unconditional reports, self-heal)
+  → type code (or '/' fuzzy-search + enter) → workspace.focus |
+    agent.focus | tab.focus | pane.focus (fallback: tab.focus of the
+    pane's tab) → confirmation beat → exit
 ```
 
-- `cmd/herdr-preview-grid/{main,jump}.go` — one binary, four modes: picker
-  (`spaces`/`agents`), `record` (MRU event hook), `sync-codes` (badge sync),
-  `jump` (popup). `main.go` resolves the mode from argv or
-  `HERDR_PLUGIN_ENTRYPOINT_ID`, wires config/state/socket; `jump.go` is the
-  popup model (type code → focus, esc cancels).
+- `cmd/herdr-preview-grid/{main,jump,tabtags}.go` — one binary, four modes:
+  picker (`spaces`/`agents`), `record` (MRU event hook), `sync-codes` (badge
+  sync), `jump` (popup + tab tagging). `main.go` resolves the mode from argv
+  or `HERDR_PLUGIN_ENTRYPOINT_ID`, wires config/state/socket; `jump.go` is
+  the popup model: live listing of all coded targets, complete codes fire
+  instantly, '/' fuzzy-searches labels, pane.focus with tab fallback;
+  `tabtags.go` retags the active space's tabs with their codes while the
+  popup is open and restores the originals on fire/esc/crash (herdr has no
+  tab-metadata surface, so a label rewrite is the only surface that works —
+  see Key facts).
 - `internal/herdr/` — socket client (one request per connection) + typed API.
 - `internal/app/` — the Bubble Tea model: data load, filter, codes
   (select-only), MRU, navigation; `view.go` holds the master-detail
@@ -55,17 +67,29 @@ prefix+f ([[keys.command]] popup)
   pane (`HERDR_PLUGIN_CONTEXT_JSON.focused_pane_id`) — the overlay itself is
   the host space's focused pane, so without this the host space would preview
   the picker itself.
-- `internal/codes/` — prefix-free jump-code table + resolver (six singles,
-  then pairs; no code is a prefix of another, so codes fire on completion —
-  invariant-tested).
+- `internal/codes/` — prefix-free jump-code table + resolver. Ten-letter
+  pool (`sdfjklerui`): every code is an ordered pair of DISTINCT letters
+  (10×9 = 90), then doubled-first triples (`ssd`) past 90 — so no code is a
+  prefix of another and codes fire on completion. No single-letter codes
+  exist. Invariant-tested across the tier boundary.
 - `internal/mru/` — usage ledger persisted to `$HERDR_PLUGIN_STATE_DIR/mru.json`.
-- `internal/jump/` — sidebar badge engine: canonical space/agent → code
-  assignment, `jumpcodes.json` state, diff-based `Sync` (reports only changed
-  tokens), prefix `Match` for the popup.
+- `internal/jump/` — jump-code engine. `Entries()` = the badge table
+  (spaces, then agents); `EntriesFor()` extends it with tabs and plain
+  non-agent panes continuing the SAME prefix-stable sequence (badge codes
+  provably unchanged — pinned by test, so popup codes always agree with
+  sidebar badges); `Sync` = hook-side badge pass — UNCONDITIONAL reports
+  (herdr wipes plugin metadata across restarts while `jumpcodes.json`
+  survives them; a diff masked exactly the stable space ids — pinned by
+  TestSyncReReportsEverythingAfterServerRestart); `Collect` = popup-side
+  full-table rebuild + badge self-heal in one pass (tab/pane list errors
+  degrade those sections instead of failing the open); prefix `Match` for
+  the popup; entries carry workspace/tab context for compound labels and
+  the pane→tab focus fallback.
 - `internal/config/` — flat `config.toml` parser (top-level keys only).
 - `tools/demo-server/` — fake herdr socket server serving a curated layout
-  (singles + pair codes, 4-digit number, duplicate labels, attention items,
-  ANSI previews) for screenshots/demos and UI work without a live session.
+  (pair codes + the triple tier, a 4-digit number, duplicate labels, two multi-tab
+  spaces so tabs/panes get their own codes, attention items, ANSI previews)
+  for screenshots/demos and UI work without a live session.
 - `docs/screenshots/` — committed PNGs rendered from the demo server
   (tmux `capture-pane -e` → ANSI→HTML → headless Chromium).
 
@@ -81,6 +105,56 @@ prefix+f ([[keys.command]] popup)
 - **Sidebar badges** are `$jump` metadata tokens reported under source
   `user:jumpd`; re-reporting a source REPLACES its tokens. A server restart
   wipes reported tokens — the `[[startup]]` hook repopulates them.
+- **Tabs cannot carry badges** (2026-10-22, verified against the bundled
+  0.9.5 schema): `tab.*` is create/list/get/focus/rename/move/close only —
+  there is no `tab.report_metadata`, and the tab bar renders tab labels
+  only (no `$token` slots). Tab codes therefore surface via the native
+  `[ui] tab_bar_right = [{ type = "command", command = "<bin> tab-codes" }]`
+  segment (active workspace only, local 1..n numbering — `tab.number` is a
+  session-global counter that would not match the bar). `tab-codes`
+  computes `EntriesFor(spaces, agents, tabs, nil, charset)` — panes sort
+  AFTER tabs, so omitting them cannot shift a tab code; failures print
+  nothing so herdr clears the segment.
+- **`pane.focus` exists but is undocumented**: `PaneTarget{pane_id}` in the
+  0.9.5 bundled schema, absent from the online method table (the table is
+  known non-exhaustive — `pane.input.set` is likewise omitted). Pane codes
+  fire it; the popup degrades to `tab.focus` on the pane's tab. Verified
+  end-to-end in an isolated session (focus moved pane-to-pane).
+- **Tab codes are label rewrites** (2026-10-24, supersedes the tab_bar_right
+  experiment): herdr 0.9.5 has no tab-metadata surface, and a polled
+  `[ui] tab_bar_right` command (floor ~1 s) can never catch a popup that
+  lives a few hundred ms — it was removed in 0.7.0. The popup now renames
+  the **active space's** tab labels to `"<code> <label>"` on open and
+  restores them on fire/esc/crash. `tab-tags.json` is written BEFORE each
+  rename (durability: a kill between the two steps is still unwindable);
+  the next open clears stale tags first and re-collects entries so a
+  previous open's tag is never compounded (`wl 1` must not become
+  `wl wl 1`). User renames survive because the saved original is what is
+  restored.
+- **`prefix+ctrl+e` is NOT bindable** (live `herdr config check`): herdr
+  reserves prefix+<the prefix key> as a literal-prefix passthrough and
+  disables such bindings — "pressing the prefix twice sends a literal
+  prefix key". "shift+prefix" is the DIRECT chord `ctrl+shift+e` (Ghostty's
+  default `new_split:down` must be unbound in the ghostty module for it to
+  reach herdr).
+- **`herdr server reload-config` does NOT reload client-side settings**
+  (keybindings, `[ui]`, tab bar). Those need the in-app reload
+  (`prefix+shift+r`) or a client restart. Verified: a running client log
+  showed zero `tab_bar_right` mentions after a CLI reload.
+- **A stale binary on PATH silently shadows the dev checkout**: the nix
+  store had 0.4.1 on PATH, so `herdr-preview-grid jump || ./bin/… jump`
+  ran the OLD popup and the `||` fallback never fired — popups appeared to
+  work while showing 0.4.1 behavior. Bindings here point at the checkout
+  path directly; only by-name after a rebuild that ships the same version.
+- **Nested herdr is disabled by default** (`experimental.allow_nested`), so
+  a TUI client cannot be attached to a test session from inside a herdr
+  pane. E2E verification therefore drives the binary against the test
+  socket directly + replicates herdr's command-entry env
+  (`HERDR_ACTIVE_WORKSPACE_ID`), and never trusts `HERDR_SESSION` for CLI
+  routing: `HERDR_SOCKET_PATH` wins over it and silently retargets calls
+  at the LIVE session (this caused two throwaway spaces in the default
+  session during 0.6.1 work — always `env -u HERDR_SOCKET_PATH` or set it
+  explicitly to the test socket).
 - **Hook events are layout-only** (workspace/pane created/closed/moved/
   renamed/reordered/exited, agent_detected). No `*.metadata_updated` events:
   a hook that reports tokens would re-trigger itself. Hooks run with cwd =
@@ -180,8 +254,11 @@ Manual QA inside herdr: open each mode, walk the list (`ctrl+j/k`), fuzzy
 search (`/n1`), select via a code (preview must follow; Enter commits), verify
 the target focus + `mru.json` update, Esc clears/closes. Sidebar: create a throwaway space (`herdr workspace create
 --label tmp --cwd /tmp`) — badges re-space via the hooks (`herdr plugin log
-list`) — then close it and confirm they re-space back; `prefix+f` + a code
-focuses its target, Esc cancels.
+list`) — then close it and confirm they re-space back. Jump popup: `prefix+f`
+(or a direct chord) opens the listing — a complete code fires instantly
+(verify space/agent codes match their sidebar badges, and that a TAB or plain
+PANE code moves the real focus: tall popups show the table; `/tab` lists the
+tab rows), Esc cancels.
 
 ## Conventions
 
