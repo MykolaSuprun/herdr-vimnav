@@ -245,10 +245,9 @@ func (m Model) renderListRow(idx, w int) string {
 	headW := 2 + chipW + 1 + numW + 1 // marker + chips + gap + number + gap
 	tailW := 1 + railW                // gap before the rail
 
-	code := ""
-	if idx < len(m.table) {
-		code = string(m.table[idx])
-	}
+	// The code shown is the item's canonical code — the same one the
+	// sidebar badge and jump popup carry for this target.
+	code := m.items[idx].Code
 
 	marker := withWash(lipgloss.NewStyle(), wash).Render("  ")
 	if selected {
@@ -322,10 +321,7 @@ func (m Model) renderDetail(l layout) string {
 	} else {
 		it := m.items[m.cursor]
 		accent = st.accentFor(it)
-		code := ""
-		if m.cursor < len(m.table) {
-			code = string(m.table[m.cursor])
-		}
+		code := it.Code
 
 		// Title: chip + label (accent) + dim meta. Falls back to a plain
 		// truncated line when the parts would overflow the inner width.

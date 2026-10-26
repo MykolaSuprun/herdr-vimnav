@@ -41,6 +41,7 @@ type Item struct {
 	Target        string // focus target (workspace id / agent pane id)
 	Focused       bool
 	Kind          string // "space" | "agent"
+	Code          string // canonical jump code ("" past table capacity)
 }
 
 // Model is the Bubble Tea model.
@@ -62,7 +63,19 @@ type Model struct {
 
 	items    []Item // ordered as displayed
 	allItems []Item // unfiltered, in base order
-	table    []codes.Code
+	// allCodes holds each allItems entry's canonical jump code, index-
+	// parallel to allItems ("" for entries past the table's capacity). It
+	// is rebuilt only on reload, from codes assigned in the server's
+	// NATURAL order — never from the displayed order — so sorting and
+	// filtering reorder rows without ever relabeling a target. The codes
+	// are exactly the sidebar-badge/jump-popup codes (jump.Entries
+	// semantics: spaces from the sequence start, agents offset by the
+	// workspace count).
+	allCodes []codes.Code
+	// nSpaces is the workspace count of the current layout, whatever the
+	// mode — loadAgents' workspace fetch sets it; it is the agents-mode
+	// code offset.
+	nSpaces int
 
 	cursor       int
 	search       string
@@ -241,16 +254,33 @@ func (m *Model) codeKey(key string, msg tea.KeyPressMsg) tea.Cmd {
 		return nil
 	}
 	if m.consumeCode(msg) {
-		idx, _, ok := codes.Resolve(m.codeBuf, m.table)
+		idx, _, ok := codes.Resolve(m.codeBuf, m.allCodes)
 		switch {
 		case ok && idx >= 0: // complete: select and consume the buffer
 			m.codeBuf = ""
-			m.setCursor(idx)
+			m.selectByCode(idx)
 		case !ok: // dead end: start over
 			m.codeBuf = ""
 		}
 	}
 	return nil
+}
+
+// selectByCode moves the cursor to the target the resolved index points at
+// in allItems. The target is normally on screen; when the active filter
+// hides it, the filter is cleared first — a code learned from the sidebar
+// or the jump popup always selects its target, whatever is displayed.
+func (m *Model) selectByCode(allIdx int) {
+	key := m.allItems[allIdx].Key
+	for i := range m.items {
+		if m.items[i].Key == key {
+			m.setCursor(i)
+			return
+		}
+	}
+	m.search = ""
+	m.filterActive = false
+	m.applyFilterFrom(key)
 }
 
 // consumeCode appends a code letter to the buffer. Every code is drawn from
@@ -292,6 +322,25 @@ func (m *Model) reload() {
 	}
 	m.errMsg = ""
 
+	// Codes BEFORE ordering: each item gets its canonical code in the
+	// server's natural order — exactly what the sidebar badges and the
+	// jump popup assign, so one code means one target on every surface.
+	// (jump.Entries semantics: spaces start the shared sequence, agents
+	// continue after the workspace codes. codes' sequence is prefix-
+	// stable, so Table(N)[i] equals the shared table's slot i regardless
+	// of N — the spaces picker needs no agent knowledge.) Everything below
+	// (priority/MRU sort, fuzzy filter) reorders rows but never relabels.
+	start := 0
+	if m.mode == ModeAgents {
+		start = m.nSpaces // authoritative count, set by loadAgents
+	}
+	table := codes.Table(start+len(items), m.cfg.Charset)
+	for i := range items {
+		if start+i < len(table) {
+			items[i].Code = string(table[start+i])
+		}
+	}
+
 	// Seed the ledger once per open: the currently focused workspace/agent is
 	// "where the user is right now" — belt-and-braces for the [[events]]
 	// hooks (covers server restarts that emit no initial focus event). Runs
@@ -315,6 +364,13 @@ func (m *Model) reload() {
 		items = mru.Order(m.ledger, items, func(it Item) string { return it.Key })
 	}
 	m.allItems = items
+	// Resolve table parallel to allItems — re-read from the (now sorted)
+	// items' own codes, so a Resolve hit can be mapped straight back to
+	// its target. Empty codes (past capacity) never match a typed key.
+	m.allCodes = make([]codes.Code, len(items))
+	for i := range items {
+		m.allCodes[i] = codes.Code(items[i].Code)
+	}
 
 	// Cursor: on first load start on the currently focused item, so the
 	// picker opens showing where you are; afterwards restore the selection
@@ -453,13 +509,20 @@ func (m *Model) loadAgents() ([]Item, error) {
 		return nil, err
 	}
 	out := make([]Item, 0, len(agents))
+	// The workspace count is authoritative here, not best-effort: agent
+	// codes continue the shared sequence AFTER the workspace codes (the
+	// same offset jump.Entries uses), so a count we don't have would give
+	// every agent a wrong code. Blank numbers were an acceptable failure;
+	// wrong codes are not.
+	workspaces, err := m.client.Workspaces()
+	if err != nil {
+		return nil, err
+	}
+	m.nSpaces = len(workspaces)
 	// The number column mirrors each agent's member-workspace row number.
-	// Best-effort: a failed fetch leaves numbers blank, codes still resolve.
 	numbers := map[string]int{}
-	if workspaces, err := m.client.Workspaces(); err == nil {
-		for _, ws := range workspaces {
-			numbers[ws.WorkspaceID] = ws.Number
-		}
+	for _, ws := range workspaces {
+		numbers[ws.WorkspaceID] = ws.Number
 	}
 	for _, a := range agents {
 		label := a.DisplayAgent
@@ -572,8 +635,8 @@ func (m *Model) applyFilterFrom(selKey string) {
 			m.items = append(m.items, m.allItems[mt.Index])
 		}
 	}
-	// Re-assign codes to the displayed order.
-	m.table = codes.Table(len(m.items), m.cfg.Charset)
+	// Codes travel with their items: rows filtered or reordered above keep
+	// the codes reload() assigned. No table is rebuilt here.
 
 	// Restore cursor on the selected key when possible.
 	m.cursor = 0

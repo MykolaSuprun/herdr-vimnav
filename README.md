@@ -89,11 +89,17 @@ regenerate: see [Development](#development).
   timeout. Typing a complete code moves the
   selection (the preview follows); `backspace` edits the code buffer;
   `enter` commits the switch. A code alone never focuses anything.
+  Every row shows its **canonical code** — the same one its sidebar badge
+  and the jump popup carry — so sorting (priority/MRU) and searching only
+  hide or reorder rows, never relabel, and a code learned from the
+  sidebar selects that exact target (clearing the filter when it hid it).
 - **Sidebar jump codes** — the native sidebar's spaces/agents rows show a
   `$jump` badge per row (reported via `report_metadata`, source `user:jumpd`).
   Codes re-sync automatically on every layout change (create/close/move/rename/
   reorder/agent-detect) through the plugin's `[[startup]]` + `[[events]]`
-  hooks — no daemon, no manual step. `prefix+f` (or a direct chord) opens a
+  hooks — no daemon, no manual step. **Automatic after a one-time row-layout
+  setup:** herdr renders `$jump` only in sidebar rows whose layout includes
+  the token (herdr's defaults do not) — see [Sidebar badges](#sidebar-badges). `prefix+f` (or a direct chord) opens a
   tiny popup: type a code → focus moves; `esc` cancels, `backspace` edits.
   Same prefix-free scheme as the picker. Popups sized ~46x12 also show a
   **live listing** of every target.
@@ -238,7 +244,9 @@ type = "plugin_action"
 command = "preview-grid.agents"
 description = "switch agent (preview grid)"
 
-# Sidebar jump codes (badges are maintained by the plugin's hooks).
+# Sidebar jump codes (badges are maintained by the plugin's hooks; the
+# sidebar renders them only after the one-time row-layout setup —
+# see "Sidebar badges").
 # The popup runs the built binary directly — see "Keybindings" for the path.
 # 46x12 fits the live listing; 44x3 still works (one visible row).
 [[keys.command]]
@@ -251,6 +259,79 @@ description = "jump to code"
 ```
 
 Reload with `prefix+shift+r` (or `herdr server reload-config`).
+
+## Sidebar badges
+
+The #1 stumbling block on a fresh install: **reporting and rendering are
+two different things**. The plugin's hooks automatically report every
+space's and agent's code as `$jump` metadata (source `user:jumpd`) — but
+herdr only *renders* a metadata token in a sidebar row whose layout
+mentions it. Herdr's default workspace/agent row layouts do not include
+`$jump`, so a fully working, correctly linked install shows **no
+badges** in the sidebar until the row layout says so. (The picker and the
+jump popup show the same codes without any sidebar setup — this is about
+the sidebar only.)
+
+One-time setup — merge a `$jump` segment into the sidebar row layouts in
+herdr's `config.toml`. Keep the segments you already have; if you use
+agent-specific `rows_by_agent` overrides, those need the token too:
+
+```toml
+[ui.sidebar.spaces]
+rows = [
+  ["state_icon", { token = "$jump", bold = true, dim = false }, "workspace"],
+  ["branch", "git_status"],
+]
+
+[ui.sidebar.agents]
+rows = [
+  ["state_icon", { token = "$jump", bold = true, dim = false }, "machine", "workspace", "tab"],
+  ["agent"],
+]
+```
+
+Keeping `$jump` before the long workspace label leaves the code visible
+when the sidebar is narrow. The same thing through Home Manager's
+`programs.herdr.settings`:
+
+```nix
+let
+  jumpToken = { token = "$jump"; bold = true; dim = false; };
+in {
+  programs.herdr.settings.ui.sidebar = {
+    spaces.rows = [
+      [ "state_icon" jumpToken "workspace" ]
+      [ "branch" "git_status" ]
+    ];
+    agents.rows = [
+      [ "state_icon" jumpToken "machine" "workspace" "tab" ]
+      [ "agent" ]
+    ];
+  };
+}
+```
+
+Apply it with the **client's** reload: `prefix+shift+r` inside the running
+herdr (or restart the client). `herdr server reload-config` reloads the
+server only — a success response does **not** mean the attached client's
+sidebar layout has refreshed; keybindings and `[ui]` settings are
+client-side.
+
+After this one-time setup everything is automatic — the `[[startup]]` +
+layout `[[events]]` hooks re-report every code on every layout change
+and after each server restart. Nothing else to touch.
+
+No badges showing? Check in this order:
+
+1. `herdr plugin list` — the plugin is present and enabled.
+2. `herdr api snapshot` — workspaces/agents carry `tokens.jump` values
+   (reporting works; the problem is rendering). Missing? Force a sync
+   (`herdr-preview-grid sync-codes` inside the session) or touch the
+   layout (create/close a workspace) and re-check.
+3. Your merged row layouts actually contain the `$jump` segment, and
+   `herdr config check` accepts the file.
+4. The **client** actually reloaded (`prefix+shift+r` in-app) — not just
+   `herdr server reload-config`.
 
 ## Keybindings
 
@@ -435,6 +516,13 @@ Standard herdr plugin anatomy:
   (`workspace.list`, `pane.list`, `agent.list`), previews
   (`pane.read` with `format = "ansi"`), and focus (`workspace.focus`,
   `agent.focus`).
+- **The pickers assign canonical codes** (spaces start the shared
+  sequence, agents continue after the workspace codes — exactly
+  `jump.Entries`, which is also the badge table). Codes are assigned in
+  the server's natural order before priority/MRU sorting, travel with
+  their items through every sort/filter, and typed codes resolve against
+  that table — a code means one target on every surface: sidebar, popup,
+  and picker.
 - MRU state is persisted to `$HERDR_PLUGIN_STATE_DIR/mru.json`; the sidebar
   badge table lives next to it in `jumpcodes.json`.
 - `sync-codes` (the `[[startup]]` + layout `[[events]]` hook mode) re-lists

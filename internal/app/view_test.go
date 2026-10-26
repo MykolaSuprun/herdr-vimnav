@@ -206,10 +206,10 @@ func testModel() Model {
 		height: 30,
 		ready:  true,
 		items: []Item{
-			{Key: "workspace:wA", Label: "n1-build", Number: 1, Cwd: "~/src/build", Status: "idle", PaneID: "wA:p1", Target: "wA", Kind: "space", Focused: true},
-			{Key: "workspace:wN", Label: "nixvim-config", Number: 2, Cwd: "~/src/nixvim", Status: "working", PaneID: "wN:p1", Target: "wN", Kind: "space"},
+			{Key: "workspace:wA", Label: "n1-build", Number: 1, Cwd: "~/src/build", Status: "idle", PaneID: "wA:p1", Target: "wA", Kind: "space", Focused: true, Code: "sd"},
+			{Key: "workspace:wN", Label: "nixvim-config", Number: 2, Cwd: "~/src/nixvim", Status: "working", PaneID: "wN:p1", Target: "wN", Kind: "space", Code: "sf"},
 		},
-		table:    []codes.Code{"j", "k"},
+		allCodes: []codes.Code{"sd", "sf"},
 		previews: map[string]string{"wA:p1": "line1\nline2\nline3"},
 	}
 }
@@ -303,7 +303,7 @@ func TestRenderDetailNoPane(t *testing.T) {
 	m := testModel()
 	m.items = m.items[1:] // single item, no pane
 	m.items[0].PaneID = ""
-	m.table = []codes.Code{"k"}
+	m.items[0].Code = "sd"
 	out := m.renderDetail(m.layout())
 	if !strings.Contains(out, "no pane") {
 		t.Errorf("missing no-pane hint: %q", out)

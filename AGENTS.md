@@ -62,7 +62,15 @@ prefix+f or a direct chord ([[keys.command]] popup)
 - `internal/herdr/` — socket client (one request per connection) + typed API.
 - `internal/app/` — the Bubble Tea model: data load, filter, codes
   (select-only), MRU, navigation; `view.go` holds the master-detail
-  layout/rendering (pure helpers + lipgloss). Preview resolution skips the
+  layout/rendering (pure helpers + lipgloss). **Codes are canonical**:
+  assigned in the server's natural order before any priority/MRU sorting
+  (spaces from the sequence start, agents offset by the workspace count —
+  exactly `jump.Entries`, i.e. badge parity), carried per item, and typed
+  codes resolve against the allItems-parallel table (`allCodes`); a code
+  that selects a target hidden by the active filter clears the filter and
+  selects it. `loadAgents`' workspace fetch is authoritative (it sets the
+  agents-mode code offset `nSpaces`); past-capacity items carry `""` and
+  never match. Preview resolution skips the
   picker's own pane (`HERDR_PANE_ID`) and falls back to the launch-context
   pane (`HERDR_PLUGIN_CONTEXT_JSON.focused_pane_id`) — the overlay itself is
   the host space's focused pane, so without this the host space would preview
@@ -173,9 +181,10 @@ prefix+f or a direct chord ([[keys.command]] popup)
   counts exact (the list pads to `bodyH` rows, the detail panel renders exactly
   `bodyH` lines: border 2 + title 1 + preview `bodyH-3`) and truncate with
   display-width awareness (`truncateANSI`).
-- **Master-row columns**: marker(2) chips(4 — badge exactly code-width:
-  singles 1 cell centered, pairs "uj" adjacent, triples "uuu"; column
-  wash-padded) number(3-4, right, dim) label(flex)
+- **Master-row columns**: marker(2) chips(4 — badge exactly code-width: pairs
+  "sd" adjacent, triples "ssd" wide; column
+  wash-padded; each row shows its CANONICAL code — badge/popup parity)
+  number(3-4, right, dim) label(flex)
   dim cwd, then a pinned rail (status dot + focused flag). Numbers: spaces use
   `ws.Number`; agents best-effort member-workspace number (blank on a failed
   fetch). Selected-row wash = `styles.washColor` (palette base blended 12%
